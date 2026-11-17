@@ -8,7 +8,7 @@ matplotlib.use('Agg')
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 import uvicorn
 import json
@@ -65,13 +65,13 @@ documents_db = []
 
 
 class VitalsInput(BaseModel):
-    heart_rate: float
-    bp_systolic: float
-    bp_diastolic: float
-    spo2: float
-    temperature: float
-    pain_level: int
-    fatigue_level: int
+    heart_rate: float = Field(gt=0, le=300)
+    bp_systolic: float = Field(gt=0, le=300)
+    bp_diastolic: float = Field(gt=0, le=200)
+    spo2: float = Field(ge=0, le=100)
+    temperature: float = Field(ge=25, le=45)
+    pain_level: int = Field(ge=0, le=10)
+    fatigue_level: int = Field(ge=0, le=10)
 
 
 class AppointmentRequest(BaseModel):
@@ -301,6 +301,8 @@ def analyze_patient_vitals(data: VitalsInput):
     Endpoint for continuous wearable data + manual symptom entry.
     """
     result = analyze_vitals(data)
+    if result.get("error"):
+        raise HTTPException(status_code=503, detail="Vitals model unavailable")
     return {
         "module": "vitals",
         "data": result,

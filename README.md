@@ -14,11 +14,11 @@ Requires Python 3.10+ and Node/npm. Run `npm install`, then `./start-demo.sh`. O
 4. Advance the simulated ambulance four times to arrival. Confirm discharge to release reusable resources. Oxygen and blood are consumed rather than automatically replenished.
 5. Edit verified capacity in Hospitals. Transfer supplies between hospitals and confirm receipt. Patient transfers require an arrived case and destination capacity; advance ambulance to arrival before receipt.
 
-Seeded facilities, coordinates, travel estimates and ambulance movement are simulations. Recommendations are an explainable resource-matching heuristic, not an LLM or validated clinical model. Staff confirmation is mandatory for dispatch.
+Seeded facilities, coordinates, travel estimates and ambulance movement are simulations. Recommendations are an explainable resource-matching heuristic, with an optional experimental trained-vitals risk modifier, not a clinically validated allocation model. Staff confirmation is mandatory for dispatch.
 
 ## Existing clinical ML modules
 
-Original patient check-ins, face/voice/vitals models, clinical queue and reports are preserved. They require the separate original FastAPI backend and its dependencies/provider configuration. The default lightweight coordination server does not run these models. They are not yet connected to allocation ranking. Do not claim autonomous diagnosis or clinically validated allocation.
+Original patient check-ins, face/voice/vitals models, clinical queue and reports are preserved. The startup script runs the original FastAPI backend on port 8001; the coordination server on 8000 proxies its original endpoints. In Dispatch, run the trained vitals model against a case. The stored advisory risk score breaks queue ties within staff-assigned urgency and increases distance weighting in eligible-hospital ranking. Missing/failed model results produce an error rather than a zero-risk assignment. Face and voice modules remain supplementary inputs in the original multimodal workflow; they are not directly weighted into allocation. Do not claim autonomous diagnosis or clinically validated allocation.
 
 ## Validation
 

@@ -39,3 +39,5 @@ build/
 
 server/*.db
 server/*.db-*
+
+.venv/

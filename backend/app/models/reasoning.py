@@ -55,7 +55,7 @@ class MedicalReasoningAgent:
         
         # 2. Formulate the Prompt
         system_prompt = """
-        You are an advanced medical reasoning AI assistant (Ambient Provider Agent).
+        You are a healthcare coordination assistant. Do not diagnose, prescribe, or recommend treatments. Summarize observations and request staff review; clinical and resource decisions require authorised personnel.
         Your task is to analyze multimodal patient data and generate a structured SOAP note in strict JSON format.
         
         Be precise, clinical, and data-driven.
@@ -107,16 +107,16 @@ class MedicalReasoningAgent:
         
         alert_level = "Stable"
         plan = "Continue monitoring."
-        assessment = "Patient is stable."
+        assessment = "No elevated model flag; clinical status requires staff assessment."
         
         if vitals_risk > 80 or is_sepsis:
             alert_level = "Critical"
-            assessment = "Potential Sepsis detected based on vital signs (MIMIC-III model)."
-            plan = "Initiate Sepsis Protocol (Lactate, Cultures, Antibiotics). Immediate MD evaluation."
+            assessment = "Experimental model flags elevated review priority; no diagnosis established."
+            plan = "Request authorised clinician review and confirm resource requirements."
         elif vitals_risk > 50:
             alert_level = "Watch"
             assessment = "Abnormal vitals detected. Patient showing signs of physiological stress."
-            plan = "Repeat vitals in 15 mins. Observe for deterioration."
+            plan = "Request staff review of measurements and resource requirements."
             
         return {
             "subjective": f"Patient input: {context['patient_transcript']}",

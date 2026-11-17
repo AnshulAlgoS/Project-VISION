@@ -1,4 +1,5 @@
 import sqlite3,json,math,uuid,os
+import urllib.request,urllib.error
 from http.server import ThreadingHTTPServer,BaseHTTPRequestHandler
 from pathlib import Path
 DB=Path(__file__).with_name('vision.db')
@@ -17,7 +18,7 @@ def recommend(s,q):
  for h in s['hospitals']:
   missing=[k for k,v in q['needs'].items() if h.get(k,0)<v]
   if h['er']>=h['erCapacity']:missing.append('ER capacity')
-  km=distance(q,h);score=round(km*2+h['er']/h['erCapacity']*12,2)
+  km=distance(q,h);score=round(km*(2+q.get('model',{}).get('risk_score',0)/50)+h['er']/h['erCapacity']*12,2)
   out.append(dict(hospitalId=h['id'],name=h['name'],eligible=not missing,missing=missing,distance=km,eta=max(2,math.ceil(km/0.5)),score=score,reason=f"{km} km away; ER {h['er']}/{h['erCapacity']}; "+('all requested resources available' if not missing else 'Unavailable: '+', '.join(missing))))
  return sorted(out,key=lambda x:(not x['eligible'],x['score']))
 def num(b,k,default=0,maximum=999):
@@ -44,6 +45,10 @@ def action(s,path,b):
   needs={k:num(b.get('needs',{}),k,0,10) for k in ['beds','icu','ventilators','oxygen','blood']}
   if not needs['beds'] and not needs['icu']:needs['beds']=1
   q=dict(id=uuid.uuid4().hex[:8],requestId=b.get('requestId'),name=name[:80],location=location[:160],note=str(b.get('note',''))[:500],urgency=urgency,needs=needs,status='requested',hospitalId=None,ambulanceId=None,progress=0,**coords(b));s['cases'].insert(0,q);return q
+ if path=='/attach-model':
+  q=find(s['cases'],b.get('caseId'))
+  if q['status']!='requested':raise ValueError('Assess before dispatch')
+  q['model']=b['model'];return q
  if path=='/dispatch':
   q=find(s['cases'],b.get('caseId'))
   if q['status']!='requested':raise ValueError('Case already dispatched')
@@ -107,12 +112,28 @@ class Handler(BaseHTTPRequestHandler):
    with conn() as c:s=json.loads(c.execute('SELECT data FROM state').fetchone()[0])
    for q in s['cases']:q['recommendations']=recommend(s,q)
    return self.respond(s)
-  self.respond(dict(error='Not found'),404)
+  self.proxy()
+ def proxy(self,body=None):
+  try:
+   req=urllib.request.Request('http://127.0.0.1:8001'+self.path,data=body,headers={'Content-Type':self.headers.get('Content-Type','application/json')},method=self.command)
+   with urllib.request.urlopen(req,timeout=90) as r:
+    raw=r.read();self.send_response(r.status);self.send_header('Content-Type',r.headers.get('Content-Type','application/json'));self.end_headers();self.wfile.write(raw)
+  except urllib.error.HTTPError as e:self.respond({'error':e.read().decode()},e.code)
+  except Exception:self.respond({'error':'Clinical ML backend unavailable on port 8001'},503)
  def do_POST(self):
   try:
    length=int(self.headers.get('Content-Length',0))
    if length>20000:raise ValueError('Request too large')
-   b=json.loads(self.rfile.read(length));
+   raw=self.rfile.read(length)
+   if self.path not in ['/cases','/dispatch','/advance','/discharge','/resources','/transfers','/receive','/assess']:return self.proxy(raw)
+   b=json.loads(raw)
+   if self.path=='/assess':
+    try:
+     req=urllib.request.Request('http://127.0.0.1:8001/analyze/vitals',data=json.dumps(b['vitals']).encode(),headers={'Content-Type':'application/json'})
+     with urllib.request.urlopen(req,timeout=30) as r:model=json.load(r)['data']
+     if model.get('error') or 'risk_score' not in model:raise ValueError('Vitals model unavailable')
+    except Exception as e:raise ValueError('Model assessment failed: '+str(e))
+    b={'caseId':b.get('caseId'),'model':model};self.path='/attach-model'
    with conn() as c:
     c.execute('BEGIN IMMEDIATE');s=json.loads(c.execute('SELECT data FROM state').fetchone()[0]);result=action(s,self.path,b);s['events'].insert(0,dict(action=self.path,record=result.get('id',''),id=uuid.uuid4().hex[:8]));s['events']=s['events'][:100];c.execute('UPDATE state SET data=? WHERE id=1',(json.dumps(s),))
    self.respond(result)

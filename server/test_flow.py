@@ -12,6 +12,13 @@ class Flow(unittest.TestCase):
   with self.assertRaises(ValueError):action(self.s,'/dispatch',dict(caseId=q['id'],hospitalId='h1'))
   for _ in range(4):action(self.s,'/advance',dict(caseId=q['id']))
   self.assertEqual(q['status'],'arrived');action(self.s,'/discharge',dict(caseId=q['id']));self.assertEqual(h['icu'],before)
+ def test_model_affects_ranking(self):
+  q=action(self.s,"/cases",dict(name="Model test",location="Gate",needs={"beds":1}))
+  before={r["hospitalId"]:r["score"] for r in recommend(self.s,q)}
+  action(self.s,"/attach-model",dict(caseId=q["id"],model={"risk_score":95,"model_used":"synthetic"}))
+  after=recommend(self.s,q)
+  self.assertTrue(any(r["score"]>before[r["hospitalId"]] for r in after if r["distance"]>0))
+  self.assertEqual(q["model"]["risk_score"],95)
  def test_supply_transfer(self):
   source,target=self.s['hospitals'][:2];total=source['oxygen']+target['oxygen'];t=action(self.s,'/transfers',dict(source='h1',target='h2',item='oxygen',amount=3));self.assertEqual(source['oxygen']+target['oxygen'],total-3);action(self.s,'/receive',dict(id=t['id']));self.assertEqual(source['oxygen']+target['oxygen'],total)
   with self.assertRaises(ValueError):action(self.s,'/receive',dict(id=t['id']))
