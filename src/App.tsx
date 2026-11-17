@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import Command from "./pages/Command";
 import Index from "./pages/Index";
 import OPDQueue from "./pages/OPDQueue";
 import PostOpMonitoring from "./pages/PostOpMonitoring";
@@ -23,7 +24,8 @@ const App = () => (
       <Sonner />
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
-          <Route path="/" element={<Index />} />
+          <Route path="/" element={<Command />} />
+          <Route path="/about" element={<Index />} />
           <Route path="/login" element={<Login />} />
           <Route path="/opd-queue" element={<OPDQueue />} />
           <Route path="/post-op" element={<PostOpMonitoring />} />

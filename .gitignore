@@ -36,3 +36,6 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+
+server/*.db
+server/*.db-*
