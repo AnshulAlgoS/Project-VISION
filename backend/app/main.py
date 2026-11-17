@@ -25,7 +25,7 @@ from app.models.vitals import analyze_vitals
 from app.models.face import analyze_face
 from app.models.voice import analyze_voice
 from app.models.fusion import calculate_risk, fusion_details
-from app.models.reasoning import reasoning_agent
+from app.models.reasoning import reasoning_agent, SummaryUnavailable
 
 load_dotenv()
 
@@ -360,16 +360,19 @@ async def analyze_multimodal(
     # Generates a SOAP note and clinical explanation
     try:
         clinical_insight = await run_in_threadpool(reasoning_agent.generate_soap_note,
-            patient_data={"vitals": vitals_dict, "id": "TEMP_ID"},
+            patient_data={"vitals": vitals_dict, "id": "TEMP_ID", "allocation": results["fusion"]},
             vitals_analysis=results["vitals_risk"],
             face_analysis=results["face_fatigue_index"],
             voice_analysis=results["voice_stress_score"],
             transcript=None # Placeholder for ASR
         )
         results["clinical_analysis"] = clinical_insight
-    except Exception as e:
-        print(f"Reasoning Error: {e}")
-        results["clinical_analysis"] = {"error": "Reasoning agent unavailable"}
+    except SummaryUnavailable as exc:
+        print("NVIDIA summary unavailable:", exc.code)
+        results["clinical_analysis"] = {"status":"unavailable","provider":"nvidia","model":reasoning_agent.model_name,"error_code":exc.code,"error":str(exc)}
+    except Exception as exc:
+        print("NVIDIA summary error:", type(exc).__name__)
+        results["clinical_analysis"] = {"status":"unavailable","provider":"nvidia","model":reasoning_agent.model_name,"error_code":"generation_error","error":"NVIDIA summary could not be generated; no fallback note was created."}
     
     patient_id = f"P{len(patients_db) + 1:03d}"
 

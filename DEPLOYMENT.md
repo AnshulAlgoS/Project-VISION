@@ -78,3 +78,7 @@ The checked-in Vercel `/api/:path*` rewrite proxies to this Render service. With
 Runtime memory optimizations: OpenCV detection + the same face CNN are the default (`VISION_FACE_DETECTOR=opencv`); MediaPipe is optional in development. Voice serving computes training-compatible MFCCs using NumPy/SciPy and omits unused pitch inference. Audio decoding is limited to ten seconds. MFCC and classifier parity is checked against librosa at three sample rates. This lowers memory/CPU overhead but is not a guarantee that every media workload fits a 512MB instance.
 
 MongoDB is disabled by default, even if an old `MONGODB_URI` remains in Render. The current deployment uses SQLite for coordination and in-memory original clinical lists. Do not enable MongoDB for this demo.
+
+NVIDIA summary model: `NVIDIA_MODEL=nvidia/nemotron-3.5-bolt-e4b` (also the code default). The old llama-3.3-70b model returns HTTP 410 from NVIDIA. Summaries include `provider`, `model`, and `status=generated`. If the provider is unavailable, status is explicitly `unavailable`; no deterministic fallback summary is generated. The `/health` summary section reports configuration without exposing secrets.
+
+Video verification: `VISION_TEST_BASE=YOUR_API_BASE python server/test_multimodal_live.py FACE.webm VOICE.wav --require-summary` asserts actual video frame inference, all three signals, live NVIDIA provenance, allocation and dispatch.

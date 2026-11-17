@@ -19,6 +19,10 @@ import {
 } from "lucide-react";
 
 interface ClinicalAnalysis {
+  status?: string;
+  provider?: string;
+  model?: string;
+  error?: string;
   subjective?: string;
   objective?: string;
   assessment?: string;
@@ -271,7 +275,7 @@ export default function Reports() {
                       <div className="flex items-center gap-2">
                         <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] uppercase tracking-wider">
                           <CheckCircle2 className="h-3 w-3 mr-1" />
-                          Latest report ready
+                          {row.latest.details?.clinical_analysis?.status === "unavailable" ? "Signals ready · summary unavailable" : "Latest report ready"}
                         </Badge>
                       </div>
                     </div>
@@ -357,8 +361,9 @@ export default function Reports() {
                     </div>
                   </CardHeader>
                   <CardContent className="p-5 space-y-4">
-                    {selectedReport?.details?.clinical_analysis ? (
+                    {selectedReport?.details?.clinical_analysis?.status === "unavailable" ? (<div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="font-semibold">NVIDIA summary unavailable</p><p>{selectedReport.details.clinical_analysis.error}</p><p>No fallback summary was generated. Model scores and allocation remain available.</p></div>) : selectedReport?.details?.clinical_analysis ? (
                       <>
+                        <p className="text-xs font-semibold text-emerald-700">{selectedReport.details.clinical_analysis.provider === "nvidia" ? `LIVE NVIDIA · ${selectedReport.details.clinical_analysis.model}` : "Previously recorded summary"}</p>
                         <div className="grid gap-4 md:grid-cols-2">
                           <div className="space-y-2">
                             <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-slate-500">

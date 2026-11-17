@@ -317,6 +317,7 @@ export default function Command() {
                   Model score {chosen.model.risk_score.toFixed(1)}/100 · {chosen.model.model_used} · Experimental advisory signal; staff confirmation required.
                   {chosen.model.signals?.map((x: Row) => <span style={{ display: "block" }} key={x.modality}>{x.modality}: {x.score.toFixed(1)} · weight {(x.normalized_weight * 100).toFixed(0)}%</span>)}
                   {Object.entries(chosen.model.excluded || {}).map(([k, v]) => <span style={{ display: "block" }} key={k}>{k}: excluded — {String(v)}</span>)}
+                  {chosen.model.details?.clinical_analysis?.status === "generated" ? <span style={{display:"block"}}>Live NVIDIA summary ready · {chosen.model.details.clinical_analysis.model} · <Link to="/reports">Open report →</Link></span> : chosen.model.details?.clinical_analysis?.status === "unavailable" ? <span role="alert" style={{display:"block"}}>NVIDIA summary unavailable: {chosen.model.details.clinical_analysis.error}. No fallback note generated.</span> : null}
                 </p>
               )}
               {chosen ? (

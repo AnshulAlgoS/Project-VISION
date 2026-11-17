@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional
 from fastapi import HTTPException,Form,File,UploadFile
 from app.main import app,VitalsInput,analyze_patient_vitals,analyze_multimodal
+from app.models.reasoning import reasoning_agent
 from app.models.vitals import model as vitals_model
 from app.models.face import face_analyzer
 from app.models.voice import model as voice_model
@@ -27,7 +28,7 @@ def mutate(path,payload):
 def readiness():
  ready=vitals_model is not None and face_analyzer.model_loaded and voice_model is not None
  if not ready:raise HTTPException(503,detail='One or more trained models unavailable')
- return {'status':'ok','models':{'vitals':True,'face':True,'voice':True},'runtime_profile':'bounded-multimodal-v2','build':os.getenv('RENDER_GIT_COMMIT','local')}
+ return {'status':'ok','models':{'vitals':True,'face':True,'voice':True},'summary':{'provider':'nvidia','configured':reasoning_agent.client is not None,'model':reasoning_agent.model_name},'runtime_profile':'bounded-multimodal-v3','build':os.getenv('RENDER_GIT_COMMIT','local')}
 
 @app.get('/state')
 def state():

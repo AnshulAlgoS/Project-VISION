@@ -227,110 +227,42 @@ class FaceAnalyzer:
 face_analyzer = FaceAnalyzer()
 
 def analyze_face(image_or_video_bytes):
-    result = face_analyzer.analyze_frame(image_or_video_bytes)
-    if isinstance(result, dict) and (
-        result.get("error") == "Invalid image data"
-        or (not result.get("detected") and result.get("signal_quality") in (None, "no_face"))
-    ):
-        tmp_path = None
-        try:
-            with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
-                tmp.write(image_or_video_bytes)
-                tmp_path = tmp.name
-
-            cap = cv2.VideoCapture(tmp_path)
-            if not cap.isOpened():
-                return {
-                    "detected": False,
-                    "fatigue_level": 0,
-                    "emotion": "Unknown",
-                    "risk_score": 0,
-                    "signal_quality": "no_video",
-                }
-
-            frame_results = []
-            frames_checked = 0
-            max_frames = 12
-
-            while frames_checked < max_frames:
-                ret, frame = cap.read()
-                if not ret:
-                    break
-                ok, buf = cv2.imencode(".jpg", frame)
-                if not ok:
-                    break
-                partial = face_analyzer.analyze_frame(buf.tobytes())
-                if isinstance(partial, dict) and not partial.get("error") and partial.get("detected"):
-                    frame_results.append(partial)
-                frames_checked += 1
-
-            cap.release()
-
-            if not frame_results:
-                if frames_checked > 0:
-                    return {
-                        "model_used": "trained_face_cnn" if self.model_loaded else "unavailable",
-                "detected": True,
-                        "fatigue_level": 10,
-                        "emotion": "Unknown",
-                        "risk_score": 10,
-                        "signal_quality": "no_face",
-                        "eyelid_state": "unknown",
-                        "brow_tension": 20.0,
-                    }
-                return {
-                    "detected": False,
-                    "fatigue_level": 0,
-                    "emotion": "Unknown",
-                    "risk_score": 0,
-                    "signal_quality": "no_face",
-                    "eyelid_state": "unknown",
-                    "brow_tension": 20.0,
-                }
-
-            avg_fatigue = sum(r.get("fatigue_level", 0) for r in frame_results) / len(frame_results)
-            max_risk = max(r.get("risk_score", 0) for r in frame_results)
-            emotion = frame_results[0].get("emotion", "Unknown")
-            eyelid_states = [r.get("eyelid_state") for r in frame_results if r.get("eyelid_state")]
-            brow_values = [float(r.get("brow_tension", 0.0)) for r in frame_results]
-            brow_avg = sum(brow_values) / len(brow_values) if brow_values else 20.0
-            eyelid_state = "unknown"
-            if eyelid_states:
-                counts = {}
-                for s in eyelid_states:
-                    counts[s] = counts.get(s, 0) + 1
-                eyelid_state = max(counts.items(), key=lambda x: x[1])[0]
-            qualities = [r.get("signal_quality") for r in frame_results if r.get("signal_quality")]
-            signal_quality = "good"
-            if "low_light" in qualities:
-                signal_quality = "low_light"
-            elif "too_far" in qualities:
-                signal_quality = "too_far"
-
-            return {
-                "model_used": "trained_face_cnn" if self.model_loaded else "unavailable",
-                "detected": True,
-                "fatigue_level": round(avg_fatigue),
-                "emotion": emotion,
-                "risk_score": max_risk,
-                "signal_quality": signal_quality,
-                "eyelid_state": eyelid_state,
-                "brow_tension": float(brow_avg),
-            }
-        except Exception as exc:
-            print("Face analysis error:", repr(exc))
-            return {
-                "detected": False,
-                "fatigue_level": 0,
-                "emotion": "Unknown",
-                "risk_score": 0,
-                "signal_quality": "error",
-            }
-        finally:
-            if tmp_path and os.path.exists(tmp_path):
-                try:
-                    os.remove(tmp_path)
-                except OSError:
-                    pass
-
-    return result
+    """Run image inference or sample up to twelve frames across a recorded video."""
+    from collections import Counter
+    result=face_analyzer.analyze_frame(image_or_video_bytes)
+    if result.get("detected") or result.get("signal_quality")=="low_light":
+        return result
+    tmp_path=None;cap=None
+    try:
+        with tempfile.NamedTemporaryFile(suffix='.webm',delete=False) as f:
+            f.write(image_or_video_bytes);tmp_path=f.name
+        cap=cv2.VideoCapture(tmp_path)
+        if not cap.isOpened():
+            return {"detected":False,"signal_quality":"invalid_media","error":"Image or video could not be decoded"}
+        total=int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        indices=np.linspace(0,max(0,total-1),min(12,max(1,total))).astype(int) if total>0 else range(12)
+        valid=[];checked=0
+        for index in indices:
+            if total>0:cap.set(cv2.CAP_PROP_POS_FRAMES,int(index))
+            ok,frame=cap.read()
+            if not ok:continue
+            checked+=1
+            encoded,buf=cv2.imencode('.jpg',frame)
+            if not encoded:continue
+            partial=face_analyzer.analyze_frame(buf.tobytes())
+            if partial.get('detected') and not partial.get('error'):valid.append(partial)
+        if not valid:
+            return {'detected':False,'signal_quality':'no_face','frames_checked':checked,'fatigue_available':False,'model_used':'trained_face_cnn' if face_analyzer.model_loaded else 'unavailable'}
+        usable=[r for r in valid if r.get('signal_quality')=='good']
+        if not usable:
+            return {'detected':True,'signal_quality':'low_quality','frames_checked':checked,'model_used':'trained_face_cnn','fatigue_available':False}
+        fatigue=[float(r['fatigue_level']) for r in usable if r.get('fatigue_available',True) and r.get('fatigue_level') is not None]
+        aggregate={'detected':True,'model_used':'trained_face_cnn','signal_quality':'good','detector':usable[0].get('detector','mediapipe'),'emotion':Counter(r.get('emotion','Unknown') for r in usable).most_common(1)[0][0],'risk_score':round(sum(float(r['risk_score']) for r in usable)/len(usable),1),'frames_checked':checked,'frames_used':len(usable),'fatigue_available':bool(fatigue)}
+        if fatigue:aggregate['fatigue_level']=round(sum(fatigue)/len(fatigue),1)
+        return aggregate
+    except Exception as exc:
+        print('Face video analysis failed:',type(exc).__name__)
+        return {'detected':False,'signal_quality':'error','error':'Face recording could not be analysed'}
+    finally:
+        if cap is not None:cap.release()
+        if tmp_path and os.path.exists(tmp_path):os.remove(tmp_path)

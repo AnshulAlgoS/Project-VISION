@@ -68,6 +68,9 @@ type VitalsRisk = {
 };
 
 type FaceAnalysis = {
+  fatigue_available?: boolean;
+  risk_score?: number;
+  model_used?: string;
   detected?: boolean;
   eyelid_state?: string;
   brow_tension?: number;
@@ -651,7 +654,7 @@ ${mockEmergencyContacts.map(ec => `- ${ec.name} (${ec.relationship}): ${ec.phone
   if (faceAnalysis.error) {
     insights.push({
       label: "System",
-      text: "Face analysis is offline in this build; only vitals are influencing the risk score.",
+      text: "This face recording could not be analysed. Retry with a centered, well-lit face; usable vitals and voice signals may still contribute.",
       muted: true,
     });
   } else if (faceAnalysis.detected) {
@@ -666,7 +669,9 @@ ${mockEmergencyContacts.map(ec => `- ${ec.name} (${ec.relationship}): ${ec.phone
     if (typeof browTension === "number" && browTension >= 70) {
       browNote = " Your eyebrows also look pulled together, which often happens when someone is in pain or distress.";
     }
-    if (faceAnalysis.fatigue_level >= 80) {
+    if (faceAnalysis.fatigue_available === false) {
+      insights.push({label:"Face",text:`Trained face model detected ${faceAnalysis.emotion || "a face"}; experimental CNN score ${faceAnalysis.risk_score ?? "unavailable"}/100. Eye fatigue was not measured. Staff should review this signal with the other measurements.`});
+    } else if (faceAnalysis.fatigue_level >= 80) {
       insights.push({
         label: "Face",
         text: `Your face scan shows heavy eye tiredness and possible distress.${emotionText}${eyeNote}${browNote} This can happen after surgery or poor sleep, so pay attention to how you feel and use this together with your vitals and your doctor's advice.`,
