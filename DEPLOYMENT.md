@@ -41,7 +41,7 @@ No `/api` suffix or trailing slash. This is a public URL, not a secret. Never pu
 No API keys are required for trained face, voice or vitals models or resource matching.
 
 - `NVIDIA_API_KEY`: optional external text summary provider; without it summaries use the deterministic fallback.
-- `MONGODB_URI`, `MONGODB_DB_NAME=vision`: optional MongoDB persistence for original clinical analyses/users/documents metadata. Without MongoDB, these original clinical lists are in memory and reset on restart. Coordination data is persisted independently in SQLite.
+- `VISION_ENABLE_MONGODB=1`, `MONGODB_URI`, `MONGODB_DB_NAME=vision`: explicit opt-in MongoDB persistence for original clinical analyses/users/documents metadata. Without MongoDB, these original clinical lists are in memory and reset on restart. Coordination data is persisted independently in SQLite.
 - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`: optional real WhatsApp delivery. Leave unset for demo; live messaging is not required for dispatch simulation.
 
 Set secrets only on Render. Leave optional variables absent rather than entering example placeholders. Neither platform needs GitHub/VERCEL tokens when deploying through its dashboard Git integration.
@@ -76,3 +76,5 @@ Backend: https://project-vision-ny6c.onrender.com/
 The checked-in Vercel `/api/:path*` rewrite proxies to this Render service. With this setup leave `VITE_API_BASE_URL` unset (the browser uses same-origin `/api`). Direct browser calls to Render still require `ALLOWED_ORIGINS=https://vision-ten-dun.vercel.app`. If the Render URL changes, update the rewrite destination.
 
 Runtime memory optimizations: OpenCV detection + the same face CNN are the default (`VISION_FACE_DETECTOR=opencv`); MediaPipe is optional in development. Voice serving computes training-compatible MFCCs using NumPy/SciPy and omits unused pitch inference. Audio decoding is limited to ten seconds. MFCC and classifier parity is checked against librosa at three sample rates. This lowers memory/CPU overhead but is not a guarantee that every media workload fits a 512MB instance.
+
+MongoDB is disabled by default, even if an old `MONGODB_URI` remains in Render. The current deployment uses SQLite for coordination and in-memory original clinical lists. Do not enable MongoDB for this demo.

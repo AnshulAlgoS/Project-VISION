@@ -29,7 +29,7 @@ from app.models.reasoning import reasoning_agent
 
 load_dotenv()
 
-MONGODB_URI = os.getenv("MONGODB_URI")
+MONGODB_URI = os.getenv("MONGODB_URI") if os.getenv("VISION_ENABLE_MONGODB", "0") == "1" else None
 MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "vision")
 
 if MONGODB_URI:
