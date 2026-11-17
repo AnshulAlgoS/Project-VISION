@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import {ClinicalShell} from "./components/ClinicalShell";
 import Command from "./pages/Command";
 import Index from "./pages/Index";
 import OPDQueue from "./pages/OPDQueue";
@@ -26,14 +27,14 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Command />} />
           <Route path="/about" element={<Index />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/opd-queue" element={<OPDQueue />} />
-          <Route path="/post-op" element={<PostOpMonitoring />} />
-          <Route path="/alerts" element={<Alerts />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/patient" element={<PatientDashboard />} />
-          <Route path="/health-profile" element={<HealthProfile />} />
+          <Route path="/login" element={<ClinicalShell><Login /></ClinicalShell>} />
+          <Route path="/opd-queue" element={<ClinicalShell><OPDQueue /></ClinicalShell>} />
+          <Route path="/post-op" element={<ClinicalShell><PostOpMonitoring /></ClinicalShell>} />
+          <Route path="/alerts" element={<ClinicalShell><Alerts /></ClinicalShell>} />
+          <Route path="/reports" element={<ClinicalShell><Reports /></ClinicalShell>} />
+          <Route path="/settings" element={<ClinicalShell><Settings /></ClinicalShell>} />
+          <Route path="/patient" element={<ClinicalShell><PatientDashboard /></ClinicalShell>} />
+          <Route path="/health-profile" element={<ClinicalShell><HealthProfile /></ClinicalShell>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

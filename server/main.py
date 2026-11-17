@@ -123,8 +123,20 @@ class Handler(BaseHTTPRequestHandler):
  def do_POST(self):
   try:
    length=int(self.headers.get('Content-Length',0))
-   if length>20000:raise ValueError('Request too large')
+   if length>30*1024*1024:raise ValueError('Request too large')
    raw=self.rfile.read(length)
+   if self.path.startswith('/assess-multimodal?'):
+    from urllib.parse import urlparse,parse_qs
+    case_id=parse_qs(urlparse(self.path).query).get('caseId',[''])[0]
+    try:
+     req=urllib.request.Request('http://127.0.0.1:8001/analyze/multimodal',data=raw,headers={'Content-Type':self.headers.get('Content-Type','')})
+     with urllib.request.urlopen(req,timeout=120) as r:analysis=json.load(r)
+     details=analysis['data'];model=dict(details['fusion'])
+     model['analysis_id']=analysis['patient_id'];model['details']=details
+    except Exception as e:raise ValueError('Multimodal assessment failed: '+str(e))
+    with conn() as c:
+     c.execute('BEGIN IMMEDIATE');s=json.loads(c.execute('SELECT data FROM state').fetchone()[0]);result=action(s,'/attach-model',{'caseId':case_id,'model':model});s['events'].insert(0,dict(action='/multimodal-assessment',record=case_id,id=uuid.uuid4().hex[:8]));c.execute('UPDATE state SET data=? WHERE id=1',(json.dumps(s),))
+    return self.respond(result)
    if self.path not in ['/cases','/dispatch','/advance','/discharge','/resources','/transfers','/receive','/assess']:return self.proxy(raw)
    b=json.loads(raw)
    if self.path=='/assess':

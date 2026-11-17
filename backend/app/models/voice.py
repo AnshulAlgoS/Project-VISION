@@ -142,6 +142,7 @@ def analyze_voice(audio_bytes):
                 stress_score = 0
             stress_score = float(stress_score)
             return {
+                "model_used": "trained_voice",
                 "stress_score": round(stress_score, 1),
                 "risk_class": risk_class,
                 "probabilities": {
@@ -155,11 +156,14 @@ def analyze_voice(audio_bytes):
 
         stress = _compute_basic_stress(y, sr)
         stress["no_speech"] = False
+        stress["model_used"] = "acoustic_heuristic"
         return stress
 
     except Exception as e:
-        print(f"Voice analysis error (fallback to neutral): {e}")
+        print(f"Voice analysis error: {e}")
         return {
+            "error": "Voice sample could not be analysed",
+            "model_used": "unavailable",
             "stress_score": 0.0,
             "risk_class": 0,
             "probabilities": {"low": 1.0, "medium": 0.0, "high": 0.0},

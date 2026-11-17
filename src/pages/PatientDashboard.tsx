@@ -1519,7 +1519,7 @@ ${mockEmergencyContacts.map(ec => `- ${ec.name} (${ec.relationship}): ${ec.phone
           
           <div className="text-center">
              <p className="text-xs text-slate-400 flex items-center justify-center gap-1">
-               <ShieldCheck className="h-3 w-3" /> Encrypted & HIPAA Compliant
+               <ShieldCheck className="h-3 w-3" /> Local demonstration · synthetic data only
              </p>
           </div>
         </div>

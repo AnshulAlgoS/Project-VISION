@@ -76,12 +76,19 @@ class FaceAnalyzer:
         """
         try:
             if self.face_mesh is None:
-                return {
-                    "detected": False,
-                    "fatigue_level": 0,
-                    "emotion": "Unknown",
-                    "risk_score": 0,
-                }
+                frame=cv2.imdecode(np.frombuffer(frame_bytes,np.uint8),cv2.IMREAD_COLOR)
+                if frame is None:return {"error":"Invalid image data","detected":False}
+                gray=cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
+                faces=cv2.CascadeClassifier(os.path.join(os.path.dirname(__file__),'haarcascade_frontalface_default.xml')).detectMultiScale(gray,1.1,4)
+                if not len(faces):return {"detected":False,"signal_quality":"no_face"}
+                if not self.model_loaded:return {"detected":False,"error":"Face model unavailable"}
+                x,y,w,h=max(faces,key=lambda r:r[2]*r[3])
+                roi=cv2.resize(gray[y:y+h,x:x+w],(48,48))/255.0
+                with torch.no_grad():
+                    output=self.model(torch.tensor(roi,dtype=torch.float32,device=self.device).unsqueeze(0).unsqueeze(0))
+                    emotion=self.emotions[int(output.argmax(1).item())]
+                score={"Fear":80,"Sad":80,"Angry":80,"Disgust":80,"Surprise":30,"Neutral":10,"Happy":0}[emotion]
+                return {"detected":True,"emotion":emotion,"risk_score":score,"signal_quality":"good" if gray.mean()>=40 else "low_light","model_used":"trained_face_cnn","detector":"opencv_haar","fatigue_available":False}
             nparr = np.frombuffer(frame_bytes, np.uint8)
             frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             
@@ -189,6 +196,7 @@ class FaceAnalyzer:
                 signal_quality = "low_light"
 
             return {
+                "model_used": "trained_face_cnn" if self.model_loaded else "unavailable",
                 "detected": True,
                 "ear": float(avg_ear),
                 "fatigue_level": fatigue_score,
@@ -199,7 +207,8 @@ class FaceAnalyzer:
                 "brow_tension": float(brow_tension),
             }
             
-        except Exception:
+        except Exception as exc:
+            print("Face analysis error:", repr(exc))
             return {
                 "detected": False,
                 "fatigue_level": 0,
@@ -254,7 +263,8 @@ def analyze_face(image_or_video_bytes):
             if not frame_results:
                 if frames_checked > 0:
                     return {
-                        "detected": True,
+                        "model_used": "trained_face_cnn" if self.model_loaded else "unavailable",
+                "detected": True,
                         "fatigue_level": 10,
                         "emotion": "Unknown",
                         "risk_score": 10,
@@ -292,6 +302,7 @@ def analyze_face(image_or_video_bytes):
                 signal_quality = "too_far"
 
             return {
+                "model_used": "trained_face_cnn" if self.model_loaded else "unavailable",
                 "detected": True,
                 "fatigue_level": round(avg_fatigue),
                 "emotion": emotion,
@@ -300,7 +311,8 @@ def analyze_face(image_or_video_bytes):
                 "eyelid_state": eyelid_state,
                 "brow_tension": float(brow_avg),
             }
-        except Exception:
+        except Exception as exc:
+            print("Face analysis error:", repr(exc))
             return {
                 "detected": False,
                 "fatigue_level": 0,

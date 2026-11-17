@@ -1,36 +1,22 @@
-def calculate_risk(results):
-    """
-    Multimodal Fusion Logic.
-    Combines Vitals Risk (Clinical), Face Fatigue (Physical), and Voice Stress (Psychological).
-    """
-    
-    # 1. Extract individual scores (default to 0 if missing)
-    vitals_score = 0
-    if "vitals_risk" in results and isinstance(results["vitals_risk"], dict):
-         vitals_score = results["vitals_risk"].get("risk_score", 0)
-    
-    face_score = 0
-    if "face_fatigue_index" in results and isinstance(results["face_fatigue_index"], dict):
-        face_score = results["face_fatigue_index"].get("fatigue_level", 0)
-        
-    voice_score = 0
-    if "voice_stress_score" in results and isinstance(results["voice_stress_score"], dict):
-        voice_score = results["voice_stress_score"].get("stress_score", 0)
+"""Experimental advisory fusion; missing modalities never count as zero-risk evidence."""
+import math
 
-    # 2. Weighted Fusion
-    # Vitals are most important (medical truth)
-    # Face/Voice are supplementary indicators of distress
-    
-    # Weights
-    W_VITALS = 0.6
-    W_FACE = 0.2
-    W_VOICE = 0.2
-    
-    final_risk = (vitals_score * W_VITALS) + (face_score * W_FACE) + (voice_score * W_VOICE)
-    
-    # 3. Dynamic Override
-    # If any single modality is CRITICAL (>90), boost the overall risk significantly
-    if vitals_score > 90 or face_score > 80 or voice_score > 80:
-        final_risk = max(final_risk, 85)
-        
-    return round(final_risk, 1)
+def fusion_details(results):
+    definitions=[('vitals','vitals_risk','risk_score',.6),('face','face_fatigue_index','risk_score',.2),('voice','voice_stress_score','stress_score',.2)]
+    used=[];excluded={}
+    for name,key,score,weight in definitions:
+        block=results.get(key) or {}
+        valid=bool(block) and not block.get('error')
+        if name=='face':valid=valid and block.get('detected') is True and block.get('signal_quality','good')=='good' and block.get('model_used')!='unavailable'
+        if name=='voice':valid=valid and block.get('no_speech') is False and block.get('model_used')=='trained_voice'
+        value=block.get(score)
+        if not valid or not isinstance(value,(int,float)) or not math.isfinite(value):
+            excluded[name]=block.get('error') or block.get('signal_quality') or ('no_speech' if block.get('no_speech') else 'not supplied or unavailable');continue
+        used.append(dict(modality=name,score=max(0,min(100,float(value))),weight=weight))
+    if not used:raise ValueError('No usable model signals')
+    total=sum(x['weight'] for x in used)
+    score=sum(x['score']*x['weight'] for x in used)/total
+    if any(x['score']>90 for x in used):score=max(score,85)
+    return dict(risk_score=round(score,1),signals=[dict(x,normalized_weight=round(x['weight']/total,4)) for x in used],excluded=excluded,model_used='multimodal_fusion',advisory=True)
+
+def calculate_risk(results):return fusion_details(results)['risk_score']

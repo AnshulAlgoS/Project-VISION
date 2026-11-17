@@ -27,7 +27,7 @@ from twilio.rest import Client as TwilioClient
 from app.models.vitals import analyze_vitals
 from app.models.face import analyze_face
 from app.models.voice import analyze_voice
-from app.models.fusion import calculate_risk
+from app.models.fusion import calculate_risk, fusion_details
 from app.models.reasoning import reasoning_agent
 
 load_dotenv()
@@ -347,7 +347,11 @@ async def analyze_multimodal(
         results["voice_stress_score"] = analyze_voice(audio_bytes)
     
     # 4. Fusion Logic
-    final_risk = calculate_risk(results)
+    try:
+        results["fusion"] = fusion_details(results)
+        final_risk = results["fusion"]["risk_score"]
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     results["overall_risk_score"] = final_risk
     
     # 5. Advanced Medical Reasoning (Ambient Provider Agent)
@@ -358,7 +362,7 @@ async def analyze_multimodal(
             vitals_analysis=results["vitals_risk"],
             face_analysis=results["face_fatigue_index"],
             voice_analysis=results["voice_stress_score"],
-            transcript="Patient explicitly mentioned feeling dizzy and nauseous." # Placeholder for ASR
+            transcript=None # Placeholder for ASR
         )
         results["clinical_analysis"] = clinical_insight
     except Exception as e:
