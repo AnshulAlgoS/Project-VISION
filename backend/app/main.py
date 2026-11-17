@@ -8,6 +8,7 @@ matplotlib.use('Agg')
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from typing import Optional
 import uvicorn
@@ -334,17 +335,17 @@ async def analyze_multimodal(
     }
     
     # 1. Process Vitals
-    results["vitals_risk"] = analyze_vitals(vitals_obj)
+    results["vitals_risk"] = await run_in_threadpool(analyze_vitals, vitals_obj)
     
     # 2. Process Video (if provided)
     if face_video:
         video_bytes = await face_video.read()
-        results["face_fatigue_index"] = analyze_face(video_bytes)
+        results["face_fatigue_index"] = await run_in_threadpool(analyze_face, video_bytes)
         
     # 3. Process Voice (if provided)
     if voice_sample:
         audio_bytes = await voice_sample.read()
-        results["voice_stress_score"] = analyze_voice(audio_bytes)
+        results["voice_stress_score"] = await run_in_threadpool(analyze_voice, audio_bytes)
     
     # 4. Fusion Logic
     try:
@@ -357,7 +358,7 @@ async def analyze_multimodal(
     # 5. Advanced Medical Reasoning (Ambient Provider Agent)
     # Generates a SOAP note and clinical explanation
     try:
-        clinical_insight = reasoning_agent.generate_soap_note(
+        clinical_insight = await run_in_threadpool(reasoning_agent.generate_soap_note,
             patient_data={"vitals": vitals_dict, "id": "TEMP_ID"},
             vitals_analysis=results["vitals_risk"],
             face_analysis=results["face_fatigue_index"],

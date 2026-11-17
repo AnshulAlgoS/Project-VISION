@@ -23,7 +23,7 @@ req=urllib.request.Request(BASE+'/assess-multimodal?caseId='+q['id'],data=body,h
 try:
  with urllib.request.urlopen(req,timeout=180) as r:q=json.load(r)
 except urllib.error.HTTPError as e:
- print(e.read().decode());raise
+ print("HTTP",e.code,e.read(350).decode(errors="replace"));raise
 model=q['model'];assert {x['modality'] for x in model['signals']}=={'face','voice','vitals'},model
 assert model['details']['face_fatigue_index']['model_used']=='trained_face_cnn'
 assert model['details']['voice_stress_score']['model_used']=='trained_voice'

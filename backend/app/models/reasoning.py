@@ -28,7 +28,9 @@ class MedicalReasoningAgent:
         if self.api_key:
             self.client = OpenAI(
                 base_url=self.base_url,
-                api_key=self.api_key
+                api_key=self.api_key,
+                timeout=20.0,
+                max_retries=0,
             )
             print("Connected to NVIDIA Nemotron NIM.")
         else:
