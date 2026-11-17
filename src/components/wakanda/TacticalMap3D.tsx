@@ -252,7 +252,7 @@ export function TacticalMap3D({ hospitals, ambulances, cases = [] }: { hospitals
       const h = el.clientHeight || 1;
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
-      camera.position.setLength(w / h < 1.1 ? 20 : 15.5);
+      camera.position.setLength(w / h < 1.1 ? 24 : 18.5);
       camera.updateProjectionMatrix();
     };
     const ro = new ResizeObserver(resize);
@@ -260,14 +260,18 @@ export function TacticalMap3D({ hospitals, ambulances, cases = [] }: { hospitals
     resize();
 
     const v = new THREE.Vector3();
-    const clock = new THREE.Clock();
+    let last = performance.now();
+    let elapsed = 0;
     let raf = 0;
     let visible = true;
     const frame = () => {
       raf = requestAnimationFrame(frame);
       if (!visible || document.hidden) return;
-      const dt = Math.min(clock.getDelta(), 0.05);
-      const t = clock.elapsedTime;
+      const nowMs = performance.now();
+      const dt = Math.min((nowMs - last) / 1000, 0.05);
+      last = nowMs;
+      elapsed += dt;
+      const t = elapsed;
       controls.update();
       const bw = el.clientWidth;
       const bh = el.clientHeight;

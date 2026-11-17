@@ -53,8 +53,8 @@ app = FastAPI(title="vision API", description="Multimodal Healthcare Intelligenc
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=[x.strip() for x in os.getenv("ALLOWED_ORIGINS", "*").split(",") if x.strip()],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

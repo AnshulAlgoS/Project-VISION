@@ -1,17 +1,6 @@
 import { useQuery, type UseQueryOptions } from "@tanstack/react-query";
 
-let apiBase = "/api";
-
-if (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_BASE_URL) {
-  apiBase = import.meta.env.VITE_API_BASE_URL;
-} else if (typeof window !== "undefined") {
-  const origin = window.location.origin;
-  if (origin.includes("vision-tan.vercel.app")) {
-    apiBase = "https://vision.onrender.com";
-  }
-}
-
-export const API_BASE = apiBase;
+export const API_BASE = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
 
 async function apiFetch<T>(endpoint: string): Promise<T> {
   const res = await fetch(`${API_BASE}${endpoint}`);

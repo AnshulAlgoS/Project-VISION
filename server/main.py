@@ -2,7 +2,8 @@ import sqlite3,json,math,uuid,os
 import urllib.request,urllib.error
 from http.server import ThreadingHTTPServer,BaseHTTPRequestHandler
 from pathlib import Path
-DB=Path(__file__).with_name('vision.db')
+DB=Path(os.getenv('VISION_DB_PATH',str(Path(__file__).with_name('vision.db'))))
+DB.parent.mkdir(parents=True,exist_ok=True)
 def conn():
  c=sqlite3.connect(DB,timeout=15);c.row_factory=sqlite3.Row;return c
 def init():

@@ -116,3 +116,69 @@ export function useClock() {
   }, []);
   return now;
 }
+
+/** Soft holographic spotlight that eases after the cursor (desktop only). */
+export function CursorGlow() {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (window.matchMedia("(pointer: coarse), (prefers-reduced-motion: reduce)").matches) return;
+    const el = ref.current;
+    if (!el) return;
+    let tx = window.innerWidth / 2, ty = window.innerHeight / 2, x = tx, y = ty, raf = 0;
+    const move = (e: PointerEvent) => { tx = e.clientX; ty = e.clientY; };
+    const loop = () => {
+      x += (tx - x) * 0.12; y += (ty - y) * 0.12;
+      el.style.transform = `translate3d(${x - 260}px,${y - 260}px,0)`;
+      raf = requestAnimationFrame(loop);
+    };
+    window.addEventListener("pointermove", move, { passive: true });
+    loop();
+    return () => { window.removeEventListener("pointermove", move); cancelAnimationFrame(raf); };
+  }, []);
+  return <div ref={ref} className="cursor-glow" aria-hidden="true" />;
+}
+
+/** Thin holographic reading-progress bar. */
+export function ScrollProgress() {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    const on = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const h = document.documentElement.scrollHeight - window.innerHeight;
+        if (ref.current) ref.current.style.transform = `scaleX(${h > 0 ? window.scrollY / h : 0})`;
+      });
+    };
+    window.addEventListener("scroll", on, { passive: true });
+    on();
+    return () => { window.removeEventListener("scroll", on); cancelAnimationFrame(raf); };
+  }, []);
+  return <div className="scroll-progress"><div ref={ref} /></div>;
+}
+
+/** Sets --px/--py (−1…1) on the ref'd element from the pointer — CSS layers use them for depth parallax. */
+export function usePointerParallax<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    if (window.matchMedia("(pointer: coarse), (prefers-reduced-motion: reduce)").matches) return;
+    const el = ref.current;
+    if (!el) return;
+    let raf = 0, tx = 0, ty = 0, x = 0, y = 0;
+    const move = (e: PointerEvent) => {
+      const b = el.getBoundingClientRect();
+      tx = Math.max(-1, Math.min(1, ((e.clientX - b.left) / b.width - 0.5) * 2));
+      ty = Math.max(-1, Math.min(1, ((e.clientY - b.top) / b.height - 0.5) * 2));
+    };
+    const loop = () => {
+      x += (tx - x) * 0.08; y += (ty - y) * 0.08;
+      el.style.setProperty("--px", x.toFixed(3));
+      el.style.setProperty("--py", y.toFixed(3));
+      raf = requestAnimationFrame(loop);
+    };
+    window.addEventListener("pointermove", move, { passive: true });
+    loop();
+    return () => { window.removeEventListener("pointermove", move); cancelAnimationFrame(raf); };
+  }, []);
+  return ref;
+}

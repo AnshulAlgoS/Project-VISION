@@ -1,0 +1,17 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+numpy==1.26.4
+pandas==2.2.3
+scikit-learn==1.8.0
+opencv-python-headless==4.11.0.86
+mediapipe==0.10.21
+librosa==0.11.0
+python-multipart==0.0.20
+joblib==1.4.2
+soundfile==0.13.1
+audioread==3.0.1
+python-dotenv==1.1.0
+pymongo==4.12.1
+openai==1.78.1
+twilio==9.6.1
+matplotlib==3.10.3

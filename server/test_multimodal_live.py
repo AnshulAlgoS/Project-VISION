@@ -1,9 +1,9 @@
 """Usage: python3 server/test_multimodal_live.py FACE_IMAGE VOICE_WAV
 Use consenting/public fixture media and synthetic vitals only.
 """
-import sys,json,uuid,urllib.request
+import sys,json,uuid,urllib.request,os
 from pathlib import Path
-BASE='http://127.0.0.1:8080/api'
+BASE=os.getenv('VISION_TEST_BASE','http://127.0.0.1:8080/api')
 def call(path,data=None):
  req=urllib.request.Request(BASE+path,data=json.dumps(data).encode() if data is not None else None,headers={'Content-Type':'application/json'})
  with urllib.request.urlopen(req,timeout=120) as r:return json.load(r)

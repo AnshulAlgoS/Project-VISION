@@ -1,11 +1,11 @@
 """Live HTTP integration: original model -> allocation -> dispatch -> arrival."""
-import urllib.request,json,uuid,time
+import urllib.request,json,uuid,time,os
 for attempt in range(90):
  try:
   with urllib.request.urlopen('http://127.0.0.1:8001/',timeout=2) as r:break
  except Exception:time.sleep(1)
 else:raise RuntimeError('ML backend did not become ready')
-BASE='http://127.0.0.1:8080/api'
+BASE=os.getenv('VISION_TEST_BASE','http://127.0.0.1:8080/api')
 def call(path,data=None):
  req=urllib.request.Request(BASE+path,data=json.dumps(data).encode() if data is not None else None,headers={'Content-Type':'application/json'})
  with urllib.request.urlopen(req,timeout=120) as r:return json.load(r)

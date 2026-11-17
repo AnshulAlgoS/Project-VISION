@@ -8,7 +8,7 @@ import * as THREE from "three";
 const HOLO = 0x00c8ff;
 const GOLD = 0xf2c14e;
 
-export function HeroScene3D({ className = "", intensity = 1 }: { className?: string; intensity?: number }) {
+export function HeroScene3D({ className = "", intensity = 1, shift = 0 }: { className?: string; intensity?: number; shift?: number }) {
   const host = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -181,25 +181,32 @@ export function HeroScene3D({ className = "", intensity = 1 }: { className?: str
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
       camera.fov = w / h < 1 ? 62 : 42;
+      // slide the whole city toward the right so copy on the left stays clear
+      if (shift && w / h >= 1) camera.setViewOffset(w, h, -shift * w, 0, w, h);
+      else camera.clearViewOffset();
       camera.updateProjectionMatrix();
     };
     const ro = new ResizeObserver(resize);
     ro.observe(el);
     resize();
 
-    const clock = new THREE.Clock();
+    let last = performance.now();
+    let elapsed = 0;
     let raf = 0;
     let visible = true;
     const frame = () => {
       raf = requestAnimationFrame(frame);
       if (!visible || document.hidden) return;
-      const dt = Math.min(clock.getDelta(), 0.05);
-      const t = clock.elapsedTime * (reduce ? 0.15 : 1);
+      const nowMs = performance.now();
+      const dt = Math.min((nowMs - last) / 1000, 0.05);
+      last = nowMs;
+      elapsed += dt;
+      const t = elapsed * (reduce ? 0.15 : 1);
 
       pointer.sx += (pointer.x - pointer.sx) * 0.05;
       pointer.sy += (pointer.y - pointer.sy) * 0.05;
       const ang = t * 0.07 + pointer.sx * 0.55 + 0.5;
-      const rad = 16.5;
+      const rad = 19;
       camera.position.set(Math.sin(ang) * rad, 7.2 - pointer.sy * 1.6, Math.cos(ang) * rad);
       camera.lookAt(0, 2.1, 0);
 
@@ -267,7 +274,7 @@ export function HeroScene3D({ className = "", intensity = 1 }: { className?: str
       renderer.dispose();
       renderer.domElement.remove();
     };
-  }, [intensity]);
+  }, [intensity, shift]);
 
   return <div ref={host} className={className} aria-hidden="true" />;
 }
