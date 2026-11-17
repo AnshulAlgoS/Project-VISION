@@ -9,7 +9,6 @@ import { HeroScene3D } from "@/components/wakanda/HeroScene3D";
 import { TacticalMap3D } from "@/components/wakanda/TacticalMap3D";
 import { TiltCard, CountUp, Marquee, Spark, useClock, CursorGlow, ScrollProgress, usePointerParallax } from "@/components/wakanda/ui";
 import { ShuriBanner } from "@/components/wakanda/Shuri";
-import { ShuriRelief3D } from "@/components/wakanda/ShuriRelief3D";
 import { HexBanner } from "@/components/wakanda/HexBanner";
 
 type Row = Record<string, any>;
@@ -21,6 +20,7 @@ export default function Command() {
   const [s, S] = useState<Row | null>(null);
   const [tab, T] = useState<string>("Overview");
   const [error, E] = useState("");
+  const [connected, setConnected] = useState(false);
   const [busy, B] = useState(false);
   const [selected, Q] = useState("");
   const [notice, N] = useState("");
@@ -32,8 +32,11 @@ export default function Command() {
       const r = await fetch(`${API_BASE}/state`);
       if (!r.ok) throw Error("Backend unavailable");
       S(await r.json());
+      setConnected(true);
+      E(previous => previous.startsWith("Backend unavailable") ? "" : previous);
     } catch {
-      E("Backend unavailable. Start python3 server/main.py on port 8000.");
+      setConnected(false);
+      E("Backend unavailable. The service may be starting or processing a request; retry shortly.");
     }
   };
   useEffect(() => {
@@ -47,6 +50,7 @@ export default function Command() {
     E("");
     try {
       const r = await fetch(API_BASE + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) });
+      if (!r.headers.get("content-type")?.includes("application/json")) throw Error(`Server unavailable (HTTP ${r.status}). Please retry shortly.`);
       const data = await r.json();
       if (!r.ok) throw Error(data.error || data.detail || "Request failed");
       N("Command confirmed · resources updated");
@@ -125,7 +129,7 @@ export default function Command() {
           </div>
           <div className="wk-top-r">
             <span className="wk-clock">{now.toLocaleTimeString([], { hour12: false })}</span>
-            <span className={"wk-live " + (error ? "off" : "")}><i /> {error ? "OFFLINE" : "SYSTEMS LIVE"}</span>
+            <span className={"wk-live " + (!connected ? "off" : "")}><i /> {connected ? "SYSTEMS LIVE" : "CONNECTING"}</span>
           </div>
         </header>
 
@@ -149,7 +153,8 @@ export default function Command() {
               </div>
               <div className="hero-figure">
                 <div className="halo" />
-                <div className="hf-shuri"><ShuriRelief3D className="hf-relief" /><span className="hf-name"><small>DESIGN GROUP</small><b>SHURI</b></span></div>
+                <img className="hf-bust" src="/images/shuri-panther-cutout.png" alt="Shuri as Black Panther" />
+                <span className="hf-name"><small>WAKANDA DESIGN GROUP</small><b>SHURI</b></span>
                 <div className="chip c1"><Gauge size={13} /> NETWORK ER LOAD <b>{erLoad}%</b></div>
                 <div className="chip c2"><i /> VIBRANIUM CORE · ACTIVE</div>
                 <div className="chip c3"><Ambulance size={13} /> QUINJETS READY <b>{ready}/{ambulances.length || 0}</b></div>
@@ -283,6 +288,7 @@ export default function Command() {
                     E("");
                     fetch(API_BASE + "/assess-multimodal?caseId=" + encodeURIComponent(chosen.id), { method: "POST", body })
                       .then(async (r) => {
+                        if (!r.headers.get("content-type")?.includes("application/json")) throw Error(`Analysis server unavailable (HTTP ${r.status}). Please retry shortly.`);
                         const x = await r.json();
                         if (!r.ok) throw Error(x.error || x.detail || "Assessment failed");
                         Q(chosen.id);

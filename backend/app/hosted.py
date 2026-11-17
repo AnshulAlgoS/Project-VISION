@@ -1,5 +1,5 @@
 """Single-process deployment entrypoint: clinical ML and coordination API."""
-import importlib.util,json,uuid
+import importlib.util,json,uuid,os
 from pathlib import Path
 from typing import Optional
 from fastapi import HTTPException,Form,File,UploadFile
@@ -27,7 +27,7 @@ def mutate(path,payload):
 def readiness():
  ready=vitals_model is not None and face_analyzer.model_loaded and voice_model is not None
  if not ready:raise HTTPException(503,detail='One or more trained models unavailable')
- return {'status':'ok','models':{'vitals':True,'face':True,'voice':True}}
+ return {'status':'ok','models':{'vitals':True,'face':True,'voice':True},'runtime_profile':'bounded-multimodal-v2','build':os.getenv('RENDER_GIT_COMMIT','local')}
 
 @app.get('/state')
 def state():

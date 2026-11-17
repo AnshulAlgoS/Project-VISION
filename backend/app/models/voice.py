@@ -1,178 +1,67 @@
-import librosa
+"""Trained voice inference with librosa-compatible MFCCs and bounded audio decoding.
+Avoids librosa/Numba pitch compilation in the serving process; pitch is not a
+feature of the saved classifier. Training scripts may continue using librosa.
+"""
+import os,tempfile,subprocess
+from functools import lru_cache
 import numpy as np
-import io
-import os
+import soundfile as sf
+from scipy.fft import dct
+from scipy.signal import get_window
 import joblib
-import tempfile
-import subprocess
-
-# Define path to the trained model
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, "voice_model.pkl")
-
-# Load model globally
+BASE_DIR=os.path.dirname(os.path.abspath(__file__))
 try:
-    model = joblib.load(MODEL_PATH)
-    print(f"Voice Model loaded from {MODEL_PATH}")
-except Exception as e:
-    print(f"Error loading voice model: {e}")
-    model = None
+    model=joblib.load(os.path.join(BASE_DIR,'voice_model.pkl'))
+    print('Trained voice model loaded')
+except Exception as exc:
+    print('Voice model unavailable:',exc);model=None
 
-def extract_features(y, sr):
-    try:
-        mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=40)
-        mfcc_mean = np.mean(mfcc.T, axis=0)
-        return mfcc_mean
-    except Exception as e:
-        print(f"Feature extraction error: {e}")
-        return None
+@lru_cache(maxsize=8)
+def mel_filters(sr):
+    # Slaney scale, 128 mel bands, area normalization; librosa defaults.
+    hz=np.array([0.,sr/2.])
+    mel=hz/(200./3.)
+    log=hz>=1000
+    mel[log]=15+np.log(hz[log]/1000)/(np.log(6.4)/27)
+    grid=np.linspace(mel[0],mel[1],130)
+    bands=grid*(200./3.);log=grid>=15
+    bands[log]=1000*np.exp((grid[log]-15)*(np.log(6.4)/27))
+    fft=np.fft.rfftfreq(2048,1./sr)
+    ramps=bands[:,None]-fft[None,:];diff=np.diff(bands)
+    weights=np.zeros((128,1025),dtype=np.float32)
+    for i in range(128):weights[i]=np.maximum(0,np.minimum(-ramps[i]/diff[i],ramps[i+2]/diff[i+1]))
+    weights*= (2./(bands[2:]-bands[:-2]))[:,None]
+    return weights
 
-def _compute_basic_stress(y, sr):
-    try:
-        rms = librosa.feature.rms(y=y)[0]
-        zcr = librosa.feature.zero_crossing_rate(y)[0]
-        energy = float(np.mean(rms))
-        crossings = float(np.mean(zcr))
-        base = min(1.0, energy * 10.0)
-        modifier = crossings
-        score = (base * 70.0) + (modifier * 30.0)
-        score = max(0.0, min(100.0, score))
-        f0, _, _ = librosa.pyin(y, fmin=librosa.note_to_hz("C2"), fmax=librosa.note_to_hz("C7"))
-        f0_clean = f0[~np.isnan(f0)]
-        avg_pitch = float(np.mean(f0_clean)) if len(f0_clean) > 0 else 0.0
-        if score < 30:
-            risk_class = 0
-            probs = [1.0, 0.0, 0.0]
-        elif score < 65:
-            risk_class = 1
-            probs = [0.2, 0.6, 0.2]
-        else:
-            risk_class = 2
-            probs = [0.1, 0.2, 0.7]
-        return {
-            "stress_score": round(float(score), 1),
-            "risk_class": risk_class,
-            "probabilities": {
-                "low": float(probs[0]),
-                "medium": float(probs[1]),
-                "high": float(probs[2]),
-            },
-            "pitch_avg": round(avg_pitch, 1),
-        }
-    except Exception:
-        return {
-            "stress_score": 0.0,
-            "risk_class": 0,
-            "probabilities": {"low": 1.0, "medium": 0.0, "high": 0.0},
-            "pitch_avg": 0.0,
-        }
+def extract_features(y,sr):
+    padded=np.pad(np.asarray(y,dtype=np.float32),(1024,1024),mode='constant')
+    frames=np.lib.stride_tricks.sliding_window_view(padded,2048)[::512]
+    window=get_window('hann',2048,fftbins=True)
+    spectrum=np.fft.rfft(frames*window,axis=1).astype(np.complex64)
+    power=(np.abs(spectrum)**2).T
+    mel=mel_filters(int(sr))@power
+    db=10*np.log10(np.maximum(1e-10,mel));db=np.maximum(db,db.max()-80.)
+    return dct(db,type=2,axis=0,norm='ortho')[:40].mean(axis=1)
 
 def analyze_voice(audio_bytes):
-    """
-    Analyzes audio for stress markers using either the trained model
-    or a lightweight acoustic heuristic if the model is unavailable.
-    """
-    temp_input = None
-    temp_output = None
+    source=target=None
     try:
-        # Create a temporary file for input
-        with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as temp_audio:
-            temp_audio.write(audio_bytes)
-            temp_input = temp_audio.name
-
-        # Create a temporary file for output (wav)
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_wav:
-            temp_output = temp_wav.name
-
-        # Convert webm to wav using ffmpeg
-        try:
-            subprocess.run(
-                ["ffmpeg", "-y", "-i", temp_input, temp_output],
-                check=True,
-                capture_output=True
-            )
-            # Load the converted wav file
-            y, sr = librosa.load(temp_output, sr=None)
-        except Exception as ffmpeg_err:
-            print(f"FFmpeg conversion failed: {ffmpeg_err}. Trying direct load...")
-            # Fallback to direct load if ffmpeg fails
-            y, sr = librosa.load(temp_input, sr=None)
-
-        if len(y) == 0:
-            return {
-                "stress_score": 0.0,
-                "risk_class": 0,
-                "probabilities": {"low": 1.0, "medium": 0.0, "high": 0.0},
-                "pitch_avg": 0.0,
-                "no_speech": True,
-            }
-
-        rms = librosa.feature.rms(y=y)[0]
-        energy = float(np.mean(rms))
-
-        f0, _, _ = librosa.pyin(
-            y,
-            fmin=librosa.note_to_hz("C2"),
-            fmax=librosa.note_to_hz("C7"),
-        )
-        f0_clean = f0[~np.isnan(f0)]
-        avg_pitch = float(np.mean(f0_clean)) if len(f0_clean) > 0 else 0.0
-        voiced_fraction = float(len(f0_clean)) / float(len(f0)) if len(f0) > 0 else 0.0
-
-        if energy < 0.008 and voiced_fraction < 0.05:
-            return {
-                "stress_score": 0.0,
-                "risk_class": 0,
-                "probabilities": {"low": 1.0, "medium": 0.0, "high": 0.0},
-                "pitch_avg": round(avg_pitch, 1),
-                "no_speech": True,
-            }
-
-        features = extract_features(y, sr)
-
-        if model and features is not None:
-            features_reshaped = features.reshape(1, -1)
-            risk_class = int(model.predict(features_reshaped)[0])
-            probs = model.predict_proba(features_reshaped)[0]
-            if len(probs) == 3:
-                stress_score = (probs[1] * 50) + (probs[2] * 100)
-            elif len(probs) == 2:
-                stress_score = probs[1] * 100
-            else:
-                stress_score = 0
-            stress_score = float(stress_score)
-            return {
-                "model_used": "trained_voice",
-                "stress_score": round(stress_score, 1),
-                "risk_class": risk_class,
-                "probabilities": {
-                    "low": float(probs[0]) if len(probs) > 0 else 0,
-                    "medium": float(probs[1]) if len(probs) > 1 else 0,
-                    "high": float(probs[2]) if len(probs) > 2 else 0,
-                },
-                "pitch_avg": round(avg_pitch, 1),
-                "no_speech": False,
-            }
-
-        stress = _compute_basic_stress(y, sr)
-        stress["no_speech"] = False
-        stress["model_used"] = "acoustic_heuristic"
-        return stress
-
-    except Exception as e:
-        print(f"Voice analysis error: {e}")
-        return {
-            "error": "Voice sample could not be analysed",
-            "model_used": "unavailable",
-            "stress_score": 0.0,
-            "risk_class": 0,
-            "probabilities": {"low": 1.0, "medium": 0.0, "high": 0.0},
-            "pitch_avg": 0.0,
-        }
+        if model is None:return {'error':'Trained voice model unavailable','model_used':'unavailable'}
+        with tempfile.NamedTemporaryFile(suffix='.media',delete=False) as f:
+            f.write(audio_bytes);source=f.name
+        with tempfile.NamedTemporaryFile(suffix='.wav',delete=False) as f:target=f.name
+        subprocess.run(['ffmpeg','-nostdin','-y','-i',source,'-t','10','-ac','1',target],check=True,capture_output=True,timeout=25)
+        y,sr=sf.read(target,dtype='float32',always_2d=True);y=y.mean(axis=1)
+        if not len(y) or float(np.sqrt(np.mean(y*y)))<.008:
+            return {'no_speech':True,'model_used':'trained_voice','signal_quality':'silent'}
+        features=extract_features(y,sr).reshape(1,-1)
+        probs=model.predict_proba(features)[0]
+        weights={0:0.,1:50.,2:100.}
+        score=sum(float(p)*weights.get(int(c),0.) for c,p in zip(model.classes_,probs))
+        return {'model_used':'trained_voice','stress_score':round(score,1),'risk_class':int(model.predict(features)[0]),'probabilities':{ {0:'low',1:'medium',2:'high'}.get(int(c),str(c)):float(p) for c,p in zip(model.classes_,probs)},'no_speech':False,'signal_quality':'audible','duration_seconds':round(len(y)/sr,2)}
+    except Exception as exc:
+        print('Voice analysis failed:',type(exc).__name__)
+        return {'error':'Voice sample could not be analysed','model_used':'unavailable'}
     finally:
-        for path in [temp_input, temp_output]:
-            if path and os.path.exists(path):
-                try:
-                    os.remove(path)
-                except Exception:
-                    pass
+        for path in [source,target]:
+            if path and os.path.exists(path):os.remove(path)

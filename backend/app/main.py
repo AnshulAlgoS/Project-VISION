@@ -2,8 +2,6 @@ import os
 # Configure Matplotlib before any other imports that might use it
 os.environ['MPLCONFIGDIR'] = '/tmp/matplotlib'
 # Disable Matplotlib's font cache building by using a non-interactive backend
-import matplotlib
-matplotlib.use('Agg')
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,8 +20,6 @@ try:
 except ImportError:
     def load_dotenv(*args, **kwargs):
         return None
-from pymongo import MongoClient
-from twilio.rest import Client as TwilioClient
 
 from app.models.vitals import analyze_vitals
 from app.models.face import analyze_face
@@ -36,6 +32,8 @@ load_dotenv()
 MONGODB_URI = os.getenv("MONGODB_URI")
 MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "vision")
 
+if MONGODB_URI:
+    from pymongo import MongoClient
 mongo_client = MongoClient(MONGODB_URI) if MONGODB_URI else None
 mongo_db = mongo_client[MONGODB_DB_NAME] if mongo_client is not None else None
 analyses_collection = mongo_db["analyses"] if mongo_db is not None else None
@@ -46,7 +44,10 @@ TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_WHATSAPP_FROM = os.getenv("TWILIO_WHATSAPP_FROM")
 
-twilio_client = TwilioClient(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN else None
+twilio_client = None
+if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN:
+    from twilio.rest import Client as TwilioClient
+    twilio_client = TwilioClient(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
 otp_store: dict[str, dict] = {}
 

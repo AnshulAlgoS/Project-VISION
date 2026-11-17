@@ -1,8 +1,14 @@
 import cv2
-import mediapipe as mp
+import os
+from types import SimpleNamespace
+if os.getenv("VISION_FACE_DETECTOR", "opencv") == "mediapipe":
+    import mediapipe as mp
+else:
+    mp = SimpleNamespace(solutions=None)
 import numpy as np
 import torch
 import torch.nn as nn
+torch.set_num_threads(1)
 import os
 import tempfile
 
@@ -53,7 +59,7 @@ class FaceAnalyzer:
         MODEL_PATH = os.path.join(BASE_DIR, "../models/face_model.pth")
         
         try:
-            self.model.load_state_dict(torch.load(MODEL_PATH, map_location=self.device))
+            self.model.load_state_dict(torch.load(MODEL_PATH, map_location=self.device, weights_only=True))
             self.model.eval()
             print(f"Face Model loaded from {MODEL_PATH}")
             self.model_loaded = True

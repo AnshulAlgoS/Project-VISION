@@ -74,3 +74,5 @@ Frontend: https://vision-ten-dun.vercel.app/
 Backend: https://project-vision-ny6c.onrender.com/
 
 The checked-in Vercel `/api/:path*` rewrite proxies to this Render service. With this setup leave `VITE_API_BASE_URL` unset (the browser uses same-origin `/api`). Direct browser calls to Render still require `ALLOWED_ORIGINS=https://vision-ten-dun.vercel.app`. If the Render URL changes, update the rewrite destination.
+
+Runtime memory optimizations: OpenCV detection + the same face CNN are the default (`VISION_FACE_DETECTOR=opencv`); MediaPipe is optional in development. Voice serving computes training-compatible MFCCs using NumPy/SciPy and omits unused pitch inference. Audio decoding is limited to ten seconds. MFCC and classifier parity is checked against librosa at three sample rates. This lowers memory/CPU overhead but is not a guarantee that every media workload fits a 512MB instance.

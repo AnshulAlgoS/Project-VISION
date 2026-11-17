@@ -12,3 +12,5 @@ Derived cut-outs (background removed locally from the images above): black-panth
 Hotlinked photos (Unsplash licence): https://images.unsplash.com/photo-1576091160399-112ba8d25d1d (clinician with phone), https://images.unsplash.com/photo-1519501025264-65ba15a82390 (city street at dusk).
 
 Shuri artwork (shuri-vision.jpg): from the team's VISION_Cinematic_Pitch_9_Slides.pptx (slide 1), supplied by the project owner; original source/licence to be confirmed before public release.
+
+Hero Shuri cut-out (shuri-panther-cutout.png): background removed locally from an image supplied by the project owner (film promotional art); source/licence to be confirmed before public release.
