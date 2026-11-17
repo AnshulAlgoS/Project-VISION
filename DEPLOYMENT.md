@@ -40,7 +40,7 @@ No `/api` suffix or trailing slash. This is a public URL, not a secret. Never pu
 
 No API keys are required for trained face, voice or vitals models or resource matching.
 
-- `NVIDIA_API_KEY`: optional external text summary provider; without it summaries use the deterministic fallback.
+- `NVIDIA_API_KEY`: required for live NVIDIA summaries. If absent or rejected, the API/UI explicitly report summary unavailable; model-based allocation remains available and no fallback note is generated.
 - `VISION_ENABLE_MONGODB=1`, `MONGODB_URI`, `MONGODB_DB_NAME=vision`: explicit opt-in MongoDB persistence for original clinical analyses/users/documents metadata. Without MongoDB, these original clinical lists are in memory and reset on restart. Coordination data is persisted independently in SQLite.
 - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`: optional real WhatsApp delivery. Leave unset for demo; live messaging is not required for dispatch simulation.
 
