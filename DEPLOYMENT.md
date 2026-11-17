@@ -67,3 +67,10 @@ Software integration is tested locally. Remote deployments must still be checked
 - Voice excluded: silent, undecodable or unavailable-model audio is excluded. FFmpeg is included in Docker.
 
 Official references: https://vercel.com/docs/frameworks/frontend/vite , https://render.com/docs/docker , https://render.com/docs/disks , https://render.com/docs/configure-environment-variables .
+
+## Current live URLs
+
+Frontend: https://vision-ten-dun.vercel.app/
+Backend: https://project-vision-ny6c.onrender.com/
+
+The checked-in Vercel `/api/:path*` rewrite proxies to this Render service. With this setup leave `VITE_API_BASE_URL` unset (the browser uses same-origin `/api`). Direct browser calls to Render still require `ALLOWED_ORIGINS=https://vision-ten-dun.vercel.app`. If the Render URL changes, update the rewrite destination.
