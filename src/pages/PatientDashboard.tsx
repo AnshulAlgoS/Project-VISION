@@ -1,0 +1,1594 @@
+
+import { useEffect, useState, useCallback } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { Button } from "@/components/ui/button";
+import { VitalsForm, VitalsData } from "@/components/patient/VitalsForm";
+import { VideoRecorder } from "@/components/patient/VideoRecorder";
+import { AudioRecorder } from "@/components/patient/AudioRecorder";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Activity,
+  Camera,
+  Mic,
+  CheckCircle2,
+  AlertTriangle,
+  Loader2,
+  ArrowLeft,
+  ArrowRight,
+  ShieldCheck,
+  HeartPulse,
+  Stethoscope,
+  Bell,
+  Pill,
+  CalendarDays,
+  PhoneCall,
+  Clock,
+  QrCode,
+  FileText,
+  FilePlus,
+  Scan,
+  User,
+  Users,
+  Shield,
+  Download,
+  Share2,
+  X
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { Navbar } from "@/components/Navbar";
+import { Link } from "react-router-dom";
+import { cn } from "@/lib/utils";
+import { useApiQuery, API_BASE } from "@/hooks/useApiQuery";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
+
+type AnalysisRecord = {
+  mongo_id?: string;
+  id: string;
+  risk: number;
+  timeToRisk: string;
+  timeMinutes: number;
+  urgency: string;
+  ttrLevel: string;
+  condition: string;
+  waitTime: string;
+  timestamp: string;
+};
+
+type VitalsRisk = {
+  risk_score?: number;
+  error?: string;
+};
+
+type FaceAnalysis = {
+  detected?: boolean;
+  eyelid_state?: string;
+  brow_tension?: number;
+  emotion?: string;
+  fatigue_level?: number;
+  signal_quality?: string;
+  error?: string;
+};
+
+type VoiceAnalysis = {
+  stress_score?: number;
+  no_speech?: boolean;
+  stutter?: boolean;
+  error?: string;
+};
+
+type TriageSummary = {
+  urgency?: string;
+  ttr_level?: string;
+  time_to_risk?: string;
+  time_minutes?: number;
+  condition?: string;
+  risk_score?: number;
+};
+
+type MultimodalResult = {
+  status: string;
+  data: {
+    vitals_risk?: VitalsRisk;
+    face_fatigue_index?: FaceAnalysis;
+    voice_stress_score?: VoiceAnalysis;
+    overall_risk_score?: number;
+  };
+  recommendation?: string;
+  patient_id?: string;
+  triage?: TriageSummary;
+};
+
+type Prescription = {
+  id: string;
+  name: string;
+  dose: string;
+  frequency: string;
+  prescribedBy: string;
+  date: string;
+  refills: number;
+  status: "active" | "expired" | "pending";
+};
+
+type LabReport = {
+  id: string;
+  testName: string;
+  date: string;
+  status: "normal" | "abnormal" | "pending";
+  results: { name: string; value: string; range: string }[];
+};
+
+type ImagingStudy = {
+  id: string;
+  type: string;
+  date: string;
+  bodyPart: string;
+  findings: string;
+  impression: string;
+  status: "completed" | "pending";
+};
+
+type MedicalHistoryItem = {
+  id: string;
+  type: "condition" | "surgery" | "allergy" | "medication";
+  title: string;
+  date: string;
+  details: string;
+};
+
+type InsuranceInfo = {
+  provider: string;
+  policyNumber: string;
+  groupNumber: string;
+  effectiveDate: string;
+  expirationDate: string;
+  coverageType: string;
+  copay: string;
+};
+
+type EmergencyContact = {
+  id: string;
+  name: string;
+  relationship: string;
+  phone: string;
+  email: string;
+  address: string;
+};
+
+const formSchema = z.object({
+  heartRate: z.coerce.number().min(30).max(220),
+  systolic: z.coerce.number().min(50).max(250),
+  diastolic: z.coerce.number().min(30).max(150),
+  spo2: z.coerce.number().min(70).max(100),
+  temp: z.coerce.number().min(30).max(45),
+  pain: z.number().min(0).max(10),
+  fatigue: z.number().min(0).max(10),
+});
+
+const demoResult: MultimodalResult = {
+  status: "analyzed",
+  data: {
+    vitals_risk: {
+      risk_score: 58,
+    },
+    face_fatigue_index: {
+      detected: true,
+      fatigue_level: 42,
+      emotion: "Calm",
+    },
+    voice_stress_score: {
+      stress_score: 35,
+    },
+    overall_risk_score: 58,
+  },
+  recommendation: "Continue monitoring",
+  patient_id: "P001",
+  triage: {
+    urgency: "medium",
+    ttr_level: "watch",
+    time_to_risk: "45 min",
+    time_minutes: 45,
+    condition: "Observation Required",
+    risk_score: 58,
+  },
+};
+
+const mockPrescriptions: Prescription[] = [
+  {
+    id: "rx-001",
+    name: "Apixaban",
+    dose: "2.5 mg",
+    frequency: "Twice daily (12 hours apart)",
+    prescribedBy: "Dr. Sarah Chen, MD",
+    date: "2025-06-10",
+    refills: 5,
+    status: "active"
+  },
+  {
+    id: "rx-002",
+    name: "Acetaminophen (Tylenol)",
+    dose: "500 mg",
+    frequency: "Every 6 hours as needed for pain (max 4000 mg/day)",
+    prescribedBy: "Dr. Sarah Chen, MD",
+    date: "2025-06-10",
+    refills: 10,
+    status: "active"
+  },
+  {
+    id: "rx-003",
+    name: "Pantoprazole (Protonix)",
+    dose: "40 mg",
+    frequency: "Once daily in the morning 30 mins before food",
+    prescribedBy: "Dr. Michael Torres, MD",
+    date: "2025-03-15",
+    refills: 6,
+    status: "active"
+  },
+  {
+    id: "rx-004",
+    name: "Lisinopril",
+    dose: "10 mg",
+    frequency: "Once daily",
+    prescribedBy: "Dr. Emily Wong, MD",
+    date: "2024-11-20",
+    refills: 0,
+    status: "expired"
+  }
+];
+
+const mockLabReports: LabReport[] = [
+  {
+    id: "lab-001",
+    testName: "Complete Blood Count (CBC)",
+    date: "2025-06-12",
+    status: "normal",
+    results: [
+      { name: "White Blood Cell (WBC)", value: "7.2 k/uL", range: "4.5-11.0 k/uL" },
+      { name: "Red Blood Cell (RBC)", value: "4.9 M/uL", range: "4.5-5.5 M/uL" },
+      { name: "Hemoglobin (Hgb)", value: "14.8 g/dL", range: "13.0-17.5 g/dL" },
+      { name: "Hematocrit (Hct)", value: "43.5 %", range: "38.0-50.0 %" },
+      { name: "Platelet Count", value: "250 k/uL", range: "150-450 k/uL" },
+      { name: "Neutrophils", value: "62 %", range: "40-75 %" },
+      { name: "Lymphocytes", value: "28 %", range: "20-50 %" }
+    ]
+  },
+  {
+    id: "lab-002",
+    testName: "Basic Metabolic Panel (BMP)",
+    date: "2025-06-12",
+    status: "abnormal",
+    results: [
+      { name: "Glucose", value: "118 mg/dL", range: "70-100 mg/dL" },
+      { name: "Sodium (Na)", value: "139 mEq/L", range: "135-145 mEq/L" },
+      { name: "Potassium (K)", value: "4.3 mEq/L", range: "3.5-5.1 mEq/L" },
+      { name: "Chloride (Cl)", value: "102 mEq/L", range: "96-106 mEq/L" },
+      { name: "Bicarbonate (HCO3)", value: "24 mEq/L", range: "22-30 mEq/L" },
+      { name: "Blood Urea Nitrogen (BUN)", value: "16 mg/dL", range: "6-20 mg/dL" },
+      { name: "Creatinine", value: "1.1 mg/dL", range: "0.7-1.3 mg/dL" },
+      { name: "Calcium", value: "9.4 mg/dL", range: "8.6-10.3 mg/dL" }
+    ]
+  },
+  {
+    id: "lab-003",
+    testName: "Liver Function Test (LFT)",
+    date: "2025-06-08",
+    status: "normal",
+    results: [
+      { name: "ALT (Alanine Transaminase)", value: "24 U/L", range: "7-56 U/L" },
+      { name: "AST (Aspartate Transaminase)", value: "28 U/L", range: "10-40 U/L" },
+      { name: "ALP (Alkaline Phosphatase)", value: "72 U/L", range: "45-115 U/L" },
+      { name: "Bilirubin, Total", value: "0.9 mg/dL", range: "0.2-1.3 mg/dL" },
+      { name: "Total Protein", value: "7.0 g/dL", range: "6.0-8.3 g/dL" },
+      { name: "Albumin", value: "4.2 g/dL", range: "3.5-5.0 g/dL" }
+    ]
+  }
+];
+
+const mockImaging: ImagingStudy[] = [
+  {
+    id: "img-001",
+    type: "Chest X-Ray",
+    date: "2025-06-05",
+    bodyPart: "Chest",
+    findings: "The lungs are clear bilaterally. No pleural effusion or pneumothorax. Heart size is within normal limits. Mediastinal contours are normal. Osseous structures are unremarkable.",
+    impression: "Normal chest radiograph.",
+    status: "completed"
+  },
+  {
+    id: "img-002",
+    type: "CT Abdomen/Pelvis with Contrast",
+    date: "2025-05-28",
+    bodyPart: "Abdomen & Pelvis",
+    findings: "Status post laparoscopic appendectomy. Surgical site healing. No free air or fluid. Liver, spleen, pancreas, kidneys, and adrenal glands are unremarkable. Bowel gas pattern is normal.",
+    impression: "Post-appendectomy changes, otherwise unremarkable CT scan.",
+    status: "completed"
+  }
+];
+
+const mockMedicalHistory: MedicalHistoryItem[] = [
+  { id: "mh-001", type: "surgery", title: "Laparoscopic Appendectomy", date: "2025-06-01", details: "Uncomplicated appendectomy for acute appendicitis. Patient tolerated procedure well. Discharged home on post-op day 1." },
+  { id: "mh-002", type: "condition", title: "Type 2 Diabetes Mellitus", date: "2023-08-15", details: "Diagnosed 2 years ago. Managed with diet and oral medications. HbA1c last checked 2 months ago: 7.1%." },
+  { id: "mh-003", type: "condition", title: "Hypertension", date: "2021-11-03", details: "Essential hypertension. Well-controlled with lisinopril 10 mg daily." },
+  { id: "mh-004", type: "allergy", title: "Penicillin", date: "2010-04-20", details: "Severe allergic reaction: hives, swelling of face and throat, difficulty breathing. Requires epinephrine pen." },
+  { id: "mh-005", type: "condition", title: "Chronic Kidney Disease (Stage 3)", date: "2024-02-10", details: "Diagnosed based on eGFR of 52 mL/min/1.73m². Regular monitoring of kidney function every 3 months." }
+];
+
+const mockInsurance: InsuranceInfo = {
+  provider: "HealthFirst Insurance",
+  policyNumber: "HF-7890123456",
+  groupNumber: "GRP-123456",
+  effectiveDate: "2024-01-01",
+  expirationDate: "2025-12-31",
+  coverageType: "PPO",
+  copay: "$25 Primary Care / $50 Specialist"
+};
+
+const mockEmergencyContacts: EmergencyContact[] = [
+  {
+    id: "ec-001",
+    name: "Sarah Johnson",
+    relationship: "Spouse",
+    phone: "+1 (555) 123-4567",
+    email: "sarah.johnson@email.com",
+    address: "123 Main Street, Apt 4B, New York, NY 10001"
+  },
+  {
+    id: "ec-002",
+    name: "Robert Johnson",
+    relationship: "Father",
+    phone: "+1 (555) 987-6543",
+    email: "robert.johnson@email.com",
+    address: "456 Oak Avenue, Brooklyn, NY 11201"
+  }
+];
+
+export default function PatientDashboard() {
+  const patientId = "P001";
+  const [activeTab, setActiveTab] = useState("vitals");
+  const [videoBlob, setVideoBlob] = useState<Blob | null>(null);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [result, setResult] = useState<MultimodalResult | null>(demoResult);
+  const [lastVitals, setLastVitals] = useState<VitalsData | null>(null);
+  const [dischargeSnippet, setDischargeSnippet] = useState<{ title: string; line: string } | null>(null);
+  const [appointmentTime, setAppointmentTime] = useState("");
+  const [isBookingAppointment, setIsBookingAppointment] = useState(false);
+  const [openModal, setOpenModal] = useState<string | null>(null);
+  const [qrCodeUrl, setQrCodeUrl] = useState("https://vision-tan.vercel.app/health-profile");
+  const { toast } = useToast();
+
+  const { data: history, isLoading: historyLoading } = useApiQuery<AnalysisRecord[]>(
+    ["patient-analyses"],
+    "/analyses?limit=6"
+  );
+
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const stored = window.localStorage.getItem("visionDischargeSnippet_P001");
+        if (stored) {
+          const parsed = JSON.parse(stored) as { title?: string; line?: string };
+          if (parsed && (parsed.title || parsed.line)) {
+            setDischargeSnippet({
+              title: parsed.title ?? "Discharge instructions",
+              line: parsed.line ?? "",
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  }, []);
+
+  const form = useForm<VitalsData>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      heartRate: 72,
+      systolic: 120,
+      diastolic: 80,
+      spo2: 98,
+      temp: 36.5,
+      pain: 2,
+      fatigue: 3,
+    },
+  });
+
+  const steps = [
+    { id: "vitals", label: "Vitals", icon: Activity },
+    { id: "video", label: "Face Scan", icon: Camera },
+    { id: "voice", label: "Voice Check", icon: Mic },
+  ];
+
+  const currentStepIndex = steps.findIndex(s => s.id === activeTab);
+
+  const onSubmit = async () => {
+    setIsSubmitting(true);
+    try {
+      const vitals = form.getValues();
+      setLastVitals(vitals);
+      const formData = new FormData();
+      
+      formData.append("vitals", JSON.stringify({
+        heart_rate: vitals.heartRate,
+        bp_systolic: vitals.systolic,
+        bp_diastolic: vitals.diastolic,
+        spo2: vitals.spo2,
+        temperature: vitals.temp,
+        pain_level: vitals.pain,
+        fatigue_level: vitals.fatigue
+      }));
+
+      if (videoBlob) {
+        formData.append("face_video", videoBlob, "face.webm");
+      }
+      if (audioBlob) {
+        formData.append("voice_sample", audioBlob, "voice.webm");
+      }
+
+      const response = await fetch(`${API_BASE}/analyze/multimodal`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Analysis failed");
+      }
+
+      const data = await response.json();
+      setResult(data);
+      
+      toast({
+        title: "Check-in Complete",
+        description: "Your health data has been analyzed successfully.",
+      });
+      
+      // Open the S3 link after check-in
+      window.open("https://s3.amazonaws.com/polo-content/3018275/8c7d3c296bc14a8580b3d7374ad12f82", "_blank");
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Error",
+        description: "Failed to submit health data. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleBookAppointment = async () => {
+    if (!appointmentTime) {
+      toast({
+        title: "Select a time",
+        description: "Please choose an appointment time before booking.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsBookingAppointment(true);
+    try {
+      const response = await fetch(`${API_BASE}/appointments`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          patient_id: patientId,
+          appointment_time: appointmentTime,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Booking failed");
+      }
+
+      toast({
+        title: "Appointment booked",
+        description: "Your appointment has been added to the OPD queue.",
+      });
+      setAppointmentTime("");
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Booking failed",
+        description: "Could not book appointment. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsBookingAppointment(false);
+    }
+  };
+
+  const handleShare = useCallback(async (title: string, content: string) => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: title,
+          text: content,
+        });
+        toast({ title: "Shared successfully!" });
+      } catch (error) {
+        console.error(error);
+        toast({ title: "Sharing cancelled", variant: "destructive" });
+      }
+    } else {
+      await navigator.clipboard.writeText(content);
+      toast({ title: "Copied to clipboard!" });
+    }
+  }, [toast]);
+
+  const handleDownload = useCallback((filename: string, content: string) => {
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "Download started!" });
+  }, [toast]);
+
+  // Handle download summary modal trigger
+  useEffect(() => {
+    if (openModal === "download-summary") {
+      const currentVitals = lastVitals ?? form.getValues();
+      const currentTemp =
+        typeof currentVitals.temp === "number" && !Number.isNaN(currentVitals.temp)
+          ? currentVitals.temp.toFixed(1)
+          : "--";
+      
+      const summaryContent = `
+vision Health Summary
+Patient: Alex Johnson
+Patient ID: ${patientId}
+Generated: ${new Date().toLocaleString()}
+
+---
+Key Medical Information:
+- Date of Birth: May 15, 1990
+- Blood Type: O+
+- Conditions: Type 2 Diabetes, Hypertension, CKD (Stage 3)
+- Allergies: Penicillin (Severe)
+
+---
+Current Medications:
+${mockPrescriptions.map(rx => `- ${rx.name} ${rx.dose} (${rx.frequency})`).join('\n')}
+
+---
+Recent Vital Signs:
+- BP: ${currentVitals.systolic}/${currentVitals.diastolic} mmHg
+- HR: ${currentVitals.heartRate} bpm
+- SpO2: ${currentVitals.spo2}%
+- Temp: ${currentTemp} °C
+
+---
+Emergency Contacts:
+${mockEmergencyContacts.map(ec => `- ${ec.name} (${ec.relationship}): ${ec.phone}`).join('\n')}
+      `.trim();
+      
+      handleDownload("alex-johnson-health-summary.txt", summaryContent);
+      setTimeout(() => setOpenModal(null), 1000);
+    }
+  }, [openModal, patientId, lastVitals, form, handleDownload]);
+
+  const data = result?.data || {};
+  const vitalsRisk = data.vitals_risk || {};
+  const faceAnalysis = data.face_fatigue_index || {};
+  const voiceAnalysis = data.voice_stress_score || {};
+  const overallRiskScore: number =
+    data.overall_risk_score ??
+    vitalsRisk.risk_score ??
+    0;
+  const triage = result?.triage || {};
+
+  const vitalsSnapshot = lastVitals ?? form.getValues();
+  const tempDisplay =
+    typeof vitalsSnapshot.temp === "number" && !Number.isNaN(vitalsSnapshot.temp)
+      ? vitalsSnapshot.temp.toFixed(1)
+      : "--";
+  const eyelidState = faceAnalysis.eyelid_state as string | undefined;
+  const browTension =
+    typeof faceAnalysis.brow_tension === "number" ? faceAnalysis.brow_tension as number : undefined;
+  const hasRenalComorbidity = true;
+  const vitalsConcerningForP001 =
+    hasRenalComorbidity &&
+    (vitalsSnapshot.heartRate >= 90 ||
+      vitalsSnapshot.systolic >= 140 ||
+      vitalsSnapshot.diastolic >= 90 ||
+      vitalsSnapshot.temp >= 38 ||
+      vitalsSnapshot.spo2 <= 94);
+
+  let riskLabel = "Low";
+  if (overallRiskScore >= 85) {
+    riskLabel = "High";
+  } else if (overallRiskScore >= 50) {
+    riskLabel = "Moderate";
+  }
+
+  const showHighRiskDoctorActions = triage.urgency === "high" || riskLabel === "High";
+
+  const insights: { label: string; text: string; muted?: boolean }[] = [];
+
+  if (vitalsRisk.error) {
+    insights.push({
+      label: "System",
+      text: "Vitals engine is temporarily unavailable; using safest baseline in this demo.",
+      muted: true,
+    });
+  } else if (typeof vitalsRisk.risk_score === "number") {
+    if (vitalsConcerningForP001) {
+      insights.push({
+        label: "Vitals",
+        text: "For your kidneys and diabetes, these readings are more concerning than for a typical patient. Let your care team know if you feel unwell or if numbers drift further from your usual range.",
+      });
+    } else if (vitalsRisk.risk_score < 30) {
+      insights.push({
+        label: "Vitals",
+        text: "Vitals are within the expected range for this stage of recovery.",
+      });
+    } else if (vitalsRisk.risk_score < 70) {
+      insights.push({
+        label: "Vitals",
+        text: "Vitals show early signs that may need closer observation.",
+      });
+    } else {
+      insights.push({
+        label: "Vitals",
+        text: "Vitals indicate a high risk of clinical deterioration.",
+      });
+    }
+  }
+
+  if (faceAnalysis.error) {
+    insights.push({
+      label: "System",
+      text: "Face analysis is offline in this build; only vitals are influencing the risk score.",
+      muted: true,
+    });
+  } else if (faceAnalysis.detected) {
+    const emotionText = faceAnalysis.emotion ? ` You currently look ${faceAnalysis.emotion.toLowerCase()} on camera.` : "";
+    let eyeNote = "";
+    if (eyelidState === "closed") {
+      eyeNote = " Your eyes look mostly closed on camera, which can mean you are extremely tired or not fully awake for the check.";
+    } else if (eyelidState === "partially_closed") {
+      eyeNote = " Your eyelids look heavy, which can happen when you are exhausted or unwell.";
+    }
+    let browNote = "";
+    if (typeof browTension === "number" && browTension >= 70) {
+      browNote = " Your eyebrows also look pulled together, which often happens when someone is in pain or distress.";
+    }
+    if (faceAnalysis.fatigue_level >= 80) {
+      insights.push({
+        label: "Face",
+        text: `Your face scan shows heavy eye tiredness and possible distress.${emotionText}${eyeNote}${browNote} This can happen after surgery or poor sleep, so pay attention to how you feel and use this together with your vitals and your doctor's advice.`,
+      });
+    } else if (faceAnalysis.fatigue_level >= 40) {
+      insights.push({
+        label: "Face",
+        text: `Your face scan shows some signs of tiredness but not severe exhaustion.${emotionText}${eyeNote}${browNote} Keep following your plan, rest well, and repeat a scan if you feel your energy dropping further.`,
+      });
+    } else {
+      insights.push({
+        label: "Face",
+        text: `Your face scan shows eyes open and alert with no strong fatigue markers.${emotionText}${eyeNote}${browNote} This is reassuring, but always combine it with how you feel and your doctor's guidance.`,
+      });
+    }
+  } else {
+    const quality = faceAnalysis.signal_quality as string | undefined;
+    if (quality === "low_light") {
+      insights.push({
+        label: "Face",
+        text: "Face scan could not see you clearly because the lighting was too low. Try again in a brighter room or facing a window; right now the system is relying mainly on your vitals.",
+        muted: true,
+      });
+    } else if (quality === "too_far") {
+      insights.push({
+        label: "Face",
+        text: "Face scan could not clearly see your face because you were too far from the camera. Move closer so your head and shoulders fill most of the frame, then repeat the scan.",
+        muted: true,
+      });
+    } else {
+      insights.push({
+        label: "Face",
+        text: "Face scan could not clearly see your face. Try again with your face centered in the frame and good lighting; for now the system is relying mainly on your vitals.",
+        muted: true,
+      });
+    }
+  }
+
+  const noSpeech = voiceAnalysis.no_speech === true;
+  const stutter = voiceAnalysis.stutter === true;
+
+  if (voiceAnalysis.error) {
+    insights.push({
+      label: "System",
+      text: "Voice analysis is offline in this build; your recording is captured but not yet scored.",
+      muted: true,
+    });
+  } else if (noSpeech) {
+    insights.push({
+      label: "Voice",
+      text: "We could not clearly hear any speech in your recording. Try speaking out loud for a few seconds in your normal or pained voice so we can analyze how you sound.",
+      muted: true,
+    });
+  } else if (typeof voiceAnalysis.stress_score === "number") {
+    if (voiceAnalysis.stress_score >= 60) {
+      insights.push({
+        label: "Voice",
+        text: "Voice analysis indicates elevated stress in speech patterns.",
+      });
+    } else if (stutter) {
+      insights.push({
+        label: "Voice",
+        text: "Your speech in this clip sounds broken or stuttered, which can happen when you are anxious, breathless, or in discomfort. If this was not intentional, repeat the voice check speaking slowly in one continuous sentence.",
+      });
+    } else if (voiceAnalysis.stress_score >= 25) {
+      insights.push({
+        label: "Voice",
+        text: "Voice analysis shows mild stress markers; continue monitoring.",
+      });
+    } else {
+      insights.push({
+        label: "Voice",
+        text: "Voice analysis shows relaxed speech with low stress markers.",
+      });
+    }
+  }
+
+  if (!insights.length) {
+    insights.push({
+      label: "System",
+      text: "Models did not detect significant risk markers across vitals, face, or voice.",
+      muted: true,
+    });
+  }
+
+  const renderModalContent = () => {
+    switch (openModal) {
+      case "prescriptions":
+        return (
+          <div className="space-y-4">
+            {mockPrescriptions.map((rx) => (
+              <Card key={rx.id} className="border border-[#e1d8c7]">
+                <CardHeader className="pb-2">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <CardTitle className="text-lg">{rx.name}</CardTitle>
+                      <CardDescription>Prescribed: {rx.date}</CardDescription>
+                    </div>
+                    <Badge variant={rx.status === "active" ? "default" : "secondary"}>
+                      {rx.status}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div><strong>Dose:</strong> {rx.dose}</div>
+                    <div><strong>Frequency:</strong> {rx.frequency}</div>
+                    <div><strong>Prescribed by:</strong> {rx.prescribedBy}</div>
+                    <div><strong>Refills:</strong> {rx.refills}</div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        );
+      
+      case "labs":
+        return (
+          <div className="space-y-6">
+            {mockLabReports.map((lab) => (
+              <Card key={lab.id} className="border border-[#e1d8c7]">
+                <CardHeader className="pb-2">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <CardTitle className="text-lg">{lab.testName}</CardTitle>
+                      <CardDescription>Collected: {lab.date}</CardDescription>
+                    </div>
+                    <Badge variant={lab.status === "normal" ? "default" : lab.status === "abnormal" ? "destructive" : "secondary"}>
+                      {lab.status}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Test</TableHead>
+                        <TableHead>Value</TableHead>
+                        <TableHead>Reference Range</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {lab.results.map((result, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="font-medium">{result.name}</TableCell>
+                          <TableCell>{result.value}</TableCell>
+                          <TableCell className="text-muted-foreground">{result.range}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        );
+      
+      case "imaging":
+        return (
+          <div className="space-y-6">
+            {mockImaging.map((study) => (
+              <Card key={study.id} className="border border-[#e1d8c7]">
+                <CardHeader className="pb-2">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <CardTitle className="text-lg">{study.type}</CardTitle>
+                      <CardDescription>Date: {study.date} | Body Part: {study.bodyPart}</CardDescription>
+                    </div>
+                    <Badge>{study.status}</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <h4 className="font-semibold text-sm text-[#7a7e9a] mb-1">Findings</h4>
+                    <p className="text-sm">{study.findings}</p>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-sm text-[#7a7e9a] mb-1">Impression</h4>
+                    <p className="text-sm font-medium">{study.impression}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        );
+      
+      case "medical-history":
+        return (
+          <div className="space-y-4">
+            {mockMedicalHistory.map((item) => (
+              <Card key={item.id} className="border border-[#e1d8c7]">
+                <CardHeader className="pb-2">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <CardTitle className="text-lg">{item.title}</CardTitle>
+                      <CardDescription>{item.date}</CardDescription>
+                    </div>
+                    <Badge>{item.type}</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm">{item.details}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        );
+      
+      case "insurance":
+        return (
+          <Card className="border border-[#e1d8c7]">
+            <CardHeader>
+              <CardTitle className="text-xl">{mockInsurance.provider}</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div><strong>Policy Number:</strong> {mockInsurance.policyNumber}</div>
+              <div><strong>Group Number:</strong> {mockInsurance.groupNumber}</div>
+              <div><strong>Effective Date:</strong> {mockInsurance.effectiveDate}</div>
+              <div><strong>Expiration Date:</strong> {mockInsurance.expirationDate}</div>
+              <div><strong>Coverage Type:</strong> {mockInsurance.coverageType}</div>
+              <div><strong>Copay:</strong> {mockInsurance.copay}</div>
+            </CardContent>
+          </Card>
+        );
+      
+      case "emergency-contacts":
+        return (
+          <div className="space-y-4">
+            {mockEmergencyContacts.map((contact) => (
+              <Card key={contact.id} className="border border-[#e1d8c7]">
+                <CardHeader className="pb-2">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <CardTitle className="text-lg">{contact.name}</CardTitle>
+                      <CardDescription>{contact.relationship}</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 gap-3 text-sm">
+                  <div><strong>Phone:</strong> {contact.phone}</div>
+                  <div><strong>Email:</strong> {contact.email}</div>
+                  <div><strong>Address:</strong> {contact.address}</div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        );
+      
+      case "health-card":
+        return (
+          <div className="space-y-6">
+            <div className="bg-[#3a3e61] text-[#fdfbf6] rounded-2xl p-6 shadow-xl">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h3 className="text-2xl font-bold">vision</h3>
+                  <p className="text-sm opacity-80">Health Card</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs uppercase opacity-80">Patient ID</p>
+                  <p className="text-xl font-bold">{patientId}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <p className="text-xs uppercase opacity-80 mb-1">Name</p>
+                  <p className="text-lg font-semibold">Alex Johnson</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase opacity-80 mb-1">Date of Birth</p>
+                  <p className="text-lg font-semibold">May 15, 1990</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase opacity-80 mb-1">Blood Type</p>
+                  <p className="text-lg font-semibold">O+</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase opacity-80 mb-1">Attending Physician</p>
+                  <p className="text-lg font-semibold">Dr. Sarah Chen</p>
+                </div>
+              </div>
+              <div className="mt-8 flex justify-center">
+                <QRCodeSVG
+                  value="/health-profile"
+                  size={120}
+                  level="H"
+                  marginSize={4}
+                />
+              </div>
+            </div>
+            
+            <Card className="border border-[#e1d8c7]">
+              <CardHeader>
+                <CardTitle>Key Medical Information</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div><strong>Conditions:</strong> Type 2 Diabetes, Hypertension, CKD (Stage 3)</div>
+                <div><strong>Allergies:</strong> Penicillin (Severe)</div>
+                <div><strong>Current Medications:</strong> Apixaban 2.5mg BID, Pantoprazole 40mg QD, Acetaminophen PRN</div>
+                <div><strong>Last Vitals (2025-06-13):</strong> BP 120/80, HR 72, SpO2 98%, Temp 36.5°C</div>
+              </CardContent>
+            </Card>
+          </div>
+        );
+      
+      case "download-summary":
+        return (
+          <div className="text-center py-10">
+            <CheckCircle2 className="mx-auto h-16 w-16 text-green-600 mb-4" />
+            <h3 className="text-xl font-bold">Downloading Summary...</h3>
+            <p className="text-muted-foreground mt-2">Your health summary is downloading now.</p>
+          </div>
+        );
+      
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="relative z-10 min-h-screen bg-gradient-to-b from-[#3a3e61] via-[#3a3e61] to-[#f1ede2] font-sans selection:bg-[#f1ede2]/20 selection:text-[#3a3e61]">
+      <Navbar />
+      <div className="pt-28 pb-20 px-4">
+        <div className="max-w-5xl mx-auto space-y-10">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="space-y-3">
+              <Link to="/" className="inline-flex items-center text-sm font-medium text-[#f1ede2]/80 hover:text-white mb-1 transition-colors px-4 py-2 rounded-full hover:bg-white/10 border border-transparent hover:border-white/40 bg-white/5">
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back to hero page
+              </Link>
+              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-[#fdfbf6] drop-shadow-sm">
+                Your recovery dashboard
+              </h1>
+              <p className="text-sm sm:text-base text-[#f1ede2]/85 max-w-xl">
+                See your latest check-in, medications, and alerts before starting a new vision scan.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 bg-[#fdfbf6]/10 border border-[#fdfbf6]/30 rounded-2xl px-4 py-3 text-xs text-[#f1ede2] shadow-lg shadow-black/20">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#fdfbf6]/90 text-[#3a3e61]">
+                <HeartPulse className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="font-semibold tracking-wide uppercase text-[11px]">Patient P001</p>
+                <p className="text-[11px] text-[#f1ede2]/80">Post-op day 3 • CKD on dialysis • Diabetes</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-3 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-75">
+            <Card className="lg:col-span-3 border-0 shadow-xl shadow-[#111322]/25 bg-[#fdfbf6]/95 backdrop-blur-xl rounded-3xl">
+              <CardHeader className="flex flex-row items-center justify-between pb-4">
+                <div>
+                  <CardTitle className="text-lg sm:text-xl font-bold text-[#111322]">
+                    Latest vitals check-in
+                  </CardTitle>
+                  <CardDescription className="text-sm text-[#4b4f70]">
+                    Logged from your latest vision check-in • Patient ID P001
+                  </CardDescription>
+                </div>
+                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                  <ShieldCheck className="h-4 w-4" />
+                  {riskLabel} risk
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6 pb-6">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="rounded-2xl bg-[#f1ede2] px-4 py-3">
+                    <p className="text-[11px] font-semibold tracking-[0.16em] uppercase text-[#7a7e9a]">Heart rate</p>
+                    <p className="mt-1 text-2xl font-black text-[#111322]">{vitalsSnapshot.heartRate} bpm</p>
+                    <p className="mt-1 text-xs text-[#4b4f70]">Target 65-90</p>
+                  </div>
+                  <div className="rounded-2xl bg-[#f1ede2] px-4 py-3">
+                    <p className="text-[11px] font-semibold tracking-[0.16em] uppercase text-[#7a7e9a]">Blood pressure</p>
+                    <p className="mt-1 text-2xl font-black text-[#111322]">
+                      {vitalsSnapshot.systolic}/{vitalsSnapshot.diastolic}
+                    </p>
+                    <p className="mt-1 text-xs text-[#4b4f70]">mmHg</p>
+                  </div>
+                  <div className="rounded-2xl bg-[#f1ede2] px-4 py-3">
+                    <p className="text-[11px] font-semibold tracking-[0.16em] uppercase text-[#7a7e9a]">SpO₂</p>
+                    <p className="mt-1 text-2xl font-black text-[#111322]">{vitalsSnapshot.spo2}%</p>
+                    <p className="mt-1 text-xs text-[#4b4f70]">Above 94% preferred</p>
+                  </div>
+                  <div className="rounded-2xl bg-[#f1ede2] px-4 py-3">
+                    <p className="text-[11px] font-semibold tracking-[0.16em] uppercase text-[#7a7e9a]">Temperature</p>
+                    <p className="mt-1 text-2xl font-black text-[#111322]">{tempDisplay} °C</p>
+                    <p className="mt-1 text-xs text-[#4b4f70]">Fever if ≥ 38.0</p>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-[#e1d8c7] bg-white px-4 py-4 flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#3a3e61]/10 text-[#3a3e61]">
+                      <Stethoscope className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold tracking-[0.16em] uppercase text-[#7a7e9a]">Assigned doctor</p>
+                      <p className="text-sm font-semibold text-[#111322]">Dr. Sarah Chen</p>
+                      <p className="text-xs text-[#4b4f70]">Post-op rounds twice daily</p>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-[#e1d8c7] bg-white px-4 py-4 flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#3a3e61]/10 text-[#3a3e61]">
+                      <CalendarDays className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold tracking-[0.16em] uppercase text-[#7a7e9a]">Procedure</p>
+                      <p className="text-sm font-semibold text-[#111322]">Laparoscopic appendectomy</p>
+                      <p className="text-xs text-[#4b4f70]">Post-op day 3 • CKD on dialysis • Diabetes</p>
+                    </div>
+                  </div>
+                </div>
+
+                {dischargeSnippet && (
+                  <div className="mt-4 rounded-2xl border border-[#e1d8c7] bg-white px-4 py-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <ShieldCheck className="h-4 w-4 text-[#3a3e61]" />
+                      <p className="text-xs font-semibold tracking-[0.16em] uppercase text-[#7a7e9a]">
+                        Prescription changes and alerts
+                      </p>
+                    </div>
+                    <p className="text-sm font-semibold text-[#111322]">
+                      {dischargeSnippet.title}
+                    </p>
+                    {dischargeSnippet.line && (
+                      <p className="mt-1 text-xs text-[#4b4f70]">
+                        {dischargeSnippet.line}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-[#e1d8c7] bg-white px-4 py-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Pill className="h-4 w-4 text-[#3a3e61]" />
+                      <p className="text-xs font-semibold tracking-[0.16em] uppercase text-[#7a7e9a]">
+                        Active medications
+                      </p>
+                    </div>
+                    <ul className="space-y-2 text-xs text-[#4b4f70]">
+                      {mockPrescriptions.filter(rx => rx.status === "active").map((m) => (
+                        <li key={m.id} className="flex items-center justify-between">
+                          <span className="font-medium text-[#111322]">{m.name}</span>
+                          <span className="text-[11px]">{m.dose}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="rounded-2xl border border-[#e1d8c7] bg-white px-4 py-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Bell className="h-4 w-4 text-[#3a3e61]" />
+                      <p className="text-xs font-semibold tracking-[0.16em] uppercase text-[#7a7e9a]">
+                        Alerts and notifications
+                      </p>
+                    </div>
+                    <ul className="space-y-2 text-xs text-[#4b4f70]">
+                      <li className="flex items-start gap-2">
+                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 text-yellow-500" />
+                        <span>Evening vitals check-in due in 2 hours.</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 text-blue-500" />
+                        <span>Short video check scheduled with Dr. Chen at 7:00 PM.</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="lg:col-span-3 border-0 shadow-xl shadow-[#111322]/25 bg-[#fdfbf6]/95 backdrop-blur-xl rounded-3xl">
+              <CardHeader className="pb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-lg sm:text-xl font-bold text-[#111322] flex items-center gap-2">
+                      <QrCode className="h-5 w-5 text-[#3a3e61]" />
+                      vision Health QR
+                    </CardTitle>
+                    <CardDescription className="text-sm text-[#4b4f70]">
+                      Your secure digital health identity for emergencies, hospital visits, and insurance claims.
+                    </CardDescription>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Emergency Ready
+                    </Badge>
+                    <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Records Synced
+                    </Badge>
+                    <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Insurance Verified
+                    </Badge>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex flex-col md:flex-row gap-6 items-start md:items-center">
+                  <div className="bg-white p-6 rounded-2xl border border-[#e1d8c7] shadow-inner">
+                    <QRCodeCanvas
+                      value={qrCodeUrl}
+                      size={220}
+                      level="H"
+                      marginSize={8}
+                      fgColor="#000000"
+                      bgColor="#FFFFFF"
+                    />
+                  </div>
+                  <div className="flex-1 space-y-4 w-full">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-xl bg-[#f1ede2] px-3 py-2.5">
+                        <p className="text-[10px] font-semibold tracking-[0.16em] uppercase text-[#7a7e9a] mb-0.5">Patient ID</p>
+                        <p className="text-sm font-bold text-[#111322]">P001</p>
+                      </div>
+                      <div className="rounded-xl bg-[#f1ede2] px-3 py-2.5">
+                        <p className="text-[10px] font-semibold tracking-[0.16em] uppercase text-[#7a7e9a] mb-0.5">Full Name</p>
+                        <p className="text-sm font-bold text-[#111322]">Alex Johnson</p>
+                      </div>
+                      <div className="rounded-xl bg-[#f1ede2] px-3 py-2.5">
+                        <p className="text-[10px] font-semibold tracking-[0.16em] uppercase text-[#7a7e9a] mb-0.5">Age</p>
+                        <p className="text-sm font-bold text-[#111322]">35 Years</p>
+                      </div>
+                      <div className="rounded-xl bg-[#f1ede2] px-3 py-2.5">
+                        <p className="text-[10px] font-semibold tracking-[0.16em] uppercase text-[#7a7e9a] mb-0.5">Blood Group</p>
+                        <p className="text-sm font-bold text-[#111322]">O+</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="secondary" size="sm" className="text-xs bg-[#f1ede2] hover:bg-[#e1d8c7] text-[#111322] rounded-xl gap-1.5" onClick={() => setOpenModal("prescriptions")}>
+                        <FileText className="h-3.5 w-3.5" />
+                        Current Prescriptions
+                      </Button>
+                      <Button variant="secondary" size="sm" className="text-xs bg-[#f1ede2] hover:bg-[#e1d8c7] text-[#111322] rounded-xl gap-1.5" onClick={() => setOpenModal("labs")}>
+                        <FilePlus className="h-3.5 w-3.5" />
+                        Lab Reports
+                      </Button>
+                      <Button variant="secondary" size="sm" className="text-xs bg-[#f1ede2] hover:bg-[#e1d8c7] text-[#111322] rounded-xl gap-1.5" onClick={() => setOpenModal("imaging")}>
+                        <Scan className="h-3.5 w-3.5" />
+                        X-Rays & Imaging
+                      </Button>
+                      <Button variant="secondary" size="sm" className="text-xs bg-[#f1ede2] hover:bg-[#e1d8c7] text-[#111322] rounded-xl gap-1.5" onClick={() => setOpenModal("medical-history")}>
+                        <User className="h-3.5 w-3.5" />
+                        Medical History
+                      </Button>
+                      <Button variant="secondary" size="sm" className="text-xs bg-[#f1ede2] hover:bg-[#e1d8c7] text-[#111322] rounded-xl gap-1.5" onClick={() => setOpenModal("insurance")}>
+                        <Shield className="h-3.5 w-3.5" />
+                        Insurance Documents
+                      </Button>
+                      <Button variant="secondary" size="sm" className="text-xs bg-[#f1ede2] hover:bg-[#e1d8c7] text-[#111322] rounded-xl gap-1.5" onClick={() => setOpenModal("emergency-contacts")}>
+                        <Users className="h-3.5 w-3.5" />
+                        Emergency Contacts
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-3 pt-2 border-t border-[#e1d8c7]">
+                  <Button className="flex-1 h-10 text-xs font-semibold bg-[#3a3e61] text-[#fdfbf6] hover:bg-[#2a2e4f] rounded-2xl" onClick={() => setOpenModal("health-card")}>
+                    View Full Health Card
+                  </Button>
+                  <Button className="flex-1 h-10 text-xs font-semibold bg-white text-[#111322] border border-[#e1d8c7] hover:bg-[#f1ede2] rounded-2xl" onClick={() => handleShare("vision Health Card - Alex Johnson", `Emergency profile for Alex Johnson (${patientId}): https://vision-tan.vercel.app/health-profile`)}>
+                    <Share2 className="mr-2 h-4 w-4" />
+                    Share Emergency Access
+                  </Button>
+                  <Button className="flex-1 h-10 text-xs font-semibold bg-white text-[#111322] border border-[#e1d8c7] hover:bg-[#f1ede2] rounded-2xl" onClick={() => setOpenModal("download-summary")}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download Health Summary
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="lg:col-span-3 grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+              <Card className="border-0 shadow-xl shadow-black/20 bg-[#fdfbf6]/95 text-[#111322] rounded-3xl">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-semibold tracking-[0.2em] uppercase text-[#3a3e61]">
+                    Check-in history
+                  </CardTitle>
+                  <CardDescription className="text-xs text-[#4b4f70]">
+                    Recent multimodal analyses stored in the hospital record.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2 text-xs">
+                  {(historyLoading ? Array.from({ length: 3 }) : history ?? []).map((_, i) => {
+                    if (!history && historyLoading) {
+                      return (
+                        <div key={i} className="h-10 rounded-2xl bg-[#f1ede2]" />
+                      );
+                    }
+                    const record = (history ?? [])[i] as AnalysisRecord;
+                    if (!record) return null;
+                    const date = new Date(record.timestamp);
+                    const timeLabel = isNaN(date.getTime())
+                      ? record.timestamp
+                      : date.toLocaleString(undefined, { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "short" });
+                    return (
+                      <div
+                        key={record.mongo_id ?? `${record.id}-${i}`}
+                        className="rounded-2xl border border-[#e1d8c7] bg-[#fdfbf6] px-3 py-2.5 flex items-center justify-between gap-3"
+                      >
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[#7a7e9a]">
+                            {record.id} • {record.condition}
+                          </span>
+                          <span className="text-[11px] text-[#4b4f70]">
+                            {timeLabel}
+                          </span>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="inline-flex items-center rounded-full border border-[#111322] px-2 py-0.5 text-[11px] font-semibold">
+                            {Math.round(record.risk)}% risk
+                          </span>
+                          <span className="inline-flex items-center rounded-full bg-[#3a3e61] px-2 py-0.5 text-[10px] font-semibold text-[#f1ede2]">
+                            {record.timeToRisk} to next risk window
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {!historyLoading && (!history || history.length === 0) && (
+                    <p className="text-[11px] text-[#7a7e9a]">
+                      Your future multimodal check-ins will appear here automatically.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-0 shadow-xl shadow-black/20 bg-[#111322]/90 text-[#fdfbf6] rounded-3xl">
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-sm font-semibold tracking-[0.2em] uppercase text-[#f1ede2]/80">
+                    AI summary
+                  </CardTitle>
+                  <CardDescription className="text-xs text-[#f1ede2]/80">
+                    What vision sees from your vitals, face and voice.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 text-xs leading-relaxed text-[#f1ede2]/90">
+                  {insights.slice(0, 3).map((item, i) => (
+                    <div
+                      key={i}
+                      className={`rounded-2xl border px-3 py-2 flex gap-3 items-start ${
+                        item.muted
+                          ? "border-[#2a2d4f]/60 bg-[#181a33]/80"
+                          : "border-[#2a2d4f] bg-[#181a33]"
+                      }`}
+                    >
+                      <div
+                        className={`mt-1 h-1.5 w-1.5 rounded-full ${
+                          item.muted ? "bg-[#9ca3c7]" : "bg-[#f97373]"
+                        }`}
+                      />
+                      <div>
+                        <p className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[#c7cbe6] mb-1">
+                          {item.label} {item.label === "System" ? "note" : "insight"}
+                        </p>
+                        <p className="text-[11px] text-[#fdfbf6]">{item.text}</p>
+                      </div>
+                    </div>
+                  ))}
+                  <p className="mt-3 text-[11px] text-[#f1ede2]/70">
+                    This summary is for guidance only. Your doctor always makes the final call.
+                  </p>
+                </CardContent>
+              </Card>
+              <Card className="border-0 shadow-xl shadow-black/20 bg-[#fdfbf6]/95 text-[#111322] rounded-3xl">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-semibold tracking-[0.2em] uppercase text-[#3a3e61] flex items-center gap-2">
+                    <CalendarDays className="h-4 w-4" />
+                    Book appointment
+                  </CardTitle>
+                  <CardDescription className="text-xs text-[#4b4f70]">
+                    Choose a time and add it to the OPD queue for your doctor.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 text-xs">
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-semibold tracking-[0.16em] uppercase text-[#7a7e9a]">
+                      Appointment time
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="datetime-local"
+                        value={appointmentTime}
+                        onChange={(event) => setAppointmentTime(event.target.value)}
+                        className="bg-white border-[#e1d8c7] text-xs"
+                      />
+                    </div>
+                    <p className="text-[11px] text-[#7a7e9a]">
+                      Your doctor will see this slot in the OPD CareQueue.
+                    </p>
+                  </div>
+                  <Button
+                    className="w-full h-10 text-xs font-semibold bg-[#111322] text-[#fdfbf6] border border-[#e1d8c7] hover:bg-black flex items-center justify-center gap-2 rounded-2xl"
+                    onClick={handleBookAppointment}
+                    disabled={isBookingAppointment}
+                  >
+                    {isBookingAppointment ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Clock className="h-4 w-4" />
+                    )}
+                    {isBookingAppointment ? "Booking..." : "Book appointment"}
+                  </Button>
+                </CardContent>
+              </Card>
+              {showHighRiskDoctorActions && (
+                <div className="space-y-2">
+                  <Button
+                    variant="outline"
+                    className="w-full h-10 text-xs font-semibold border-[#f97373]/70 text-[#111322] bg-[#fee2e2] hover:bg-[#fecaca] flex items-center justify-center gap-2 rounded-2xl"
+                    onClick={() => {
+                      toast({
+                        title: "Doctor notified",
+                        description: "Your assigned doctor has been notified about this high-risk check-in.",
+                      });
+                    }}
+                  >
+                    <Bell className="h-4 w-4" />
+                    Notify assigned doctor
+                  </Button>
+                  <Button
+                    className="w-full h-10 text-xs font-semibold bg-[#111322] text-[#fdfbf6] border border-[#e1d8c7] hover:bg-black flex items-center justify-center gap-2 rounded-2xl"
+                    onClick={() => {
+                      toast({
+                        title: "Call started",
+                        description: "In a real deployment this would start a call to your care team.",
+                      });
+                    }}
+                  >
+                    <PhoneCall className="h-4 w-4" />
+                    Call doctor now
+                  </Button>
+                </div>
+              )}
+              <Button
+                className="w-full h-12 text-sm font-semibold bg-[#fdfbf6] text-[#111322] border border-[#e1d8c7] rounded-2xl shadow-lg shadow-black/20 hover:bg-[#f1ede2]"
+                onClick={() => setResult(null)}
+              >
+                Start new multimodal check-in
+              </Button>
+            </div>
+          </div>
+
+          <div className="relative flex justify-between max-w-lg mx-auto mb-12 mt-6 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-100">
+            <div className="absolute top-1/2 left-0 w-full h-1.5 bg-slate-100 -z-10 rounded-full" />
+            <div
+              className="absolute top-1/2 left-0 h-1.5 bg-gradient-to-r from-blue-600 to-indigo-500 -z-10 rounded-full transition-all duration-700 ease-out"
+              style={{ width: `${(currentStepIndex / (steps.length - 1)) * 100}%` }}
+            />
+            {steps.map((step, index) => {
+              const isActive = index <= currentStepIndex;
+              const isCurrent = index === currentStepIndex;
+              return (
+                <div key={step.id} className="flex flex-col items-center gap-3 bg-transparent group cursor-default">
+                  <div className={cn(
+                    "w-12 h-12 rounded-full flex items-center justify-center border-4 transition-all duration-500 relative",
+                    isActive ? "bg-white border-blue-600 text-blue-600 shadow-lg shadow-blue-500/20 scale-110" : "bg-white border-slate-100 text-slate-300"
+                  )}>
+                    {isActive && <div className="absolute inset-0 bg-blue-50 rounded-full animate-ping opacity-20" />}
+                    <step.icon className={cn("h-5 w-5 transition-transform duration-300", isCurrent ? "scale-110" : "")} />
+                  </div>
+                  <span className={cn(
+                    "text-xs font-bold uppercase tracking-wider transition-colors duration-300",
+                    isCurrent ? "text-blue-700" : isActive ? "text-slate-600" : "text-slate-400"
+                  )}>{step.label}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          <Card className="border-0 shadow-2xl bg-white/80 backdrop-blur-xl overflow-hidden ring-1 ring-slate-900/5 rounded-3xl animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <div className="p-1">
+                 {/* Hidden TabsList since we have custom stepper */}
+                 <TabsList className="hidden">
+                  {steps.map(step => (
+                    <TabsTrigger key={step.id} value={step.id}>{step.label}</TabsTrigger>
+                  ))}
+                 </TabsList>
+              </div>
+
+              <div className="p-8 sm:p-10 min-h-[400px]">
+                <TabsContent value="vitals" className="mt-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <div className="mb-8">
+                    <h3 className="text-xl font-bold text-slate-900 mb-2">Vital Signs</h3>
+                    <p className="text-slate-500">Please enter your latest measurements from your wearable device.</p>
+                  </div>
+                  <VitalsForm form={form} />
+                  <div className="mt-10 flex justify-end">
+                    <Button onClick={() => setActiveTab("video")} size="lg" className="bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20 px-8 rounded-xl h-12">
+                      Next: Face Scan <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="video" className="mt-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                   <div className="mb-8">
+                    <h3 className="text-xl font-bold text-slate-900 mb-2">Facial Analysis</h3>
+                    <p className="text-slate-500">Position your face in the frame to analyze fatigue markers.</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
+                    <VideoRecorder onRecordingComplete={(blob) => {
+                      setVideoBlob(blob);
+                      toast({ title: "Video saved", description: "Proceed to voice check." });
+                    }} />
+                  </div>
+                  <div className="mt-10 flex justify-between">
+                    <Button variant="ghost" onClick={() => setActiveTab("vitals")} className="text-slate-500 hover:text-slate-900">
+                      Back
+                    </Button>
+                    <Button
+                      onClick={() => setActiveTab("voice")}
+                      disabled={!videoBlob}
+                      size="lg"
+                      className="bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20 px-8 rounded-xl h-12 disabled:opacity-50"
+                    >
+                      Next: Voice Check <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="voice" className="mt-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                   <div className="mb-8">
+                    <h3 className="text-xl font-bold text-slate-900 mb-2">Voice Analysis</h3>
+                    <p className="text-slate-500">Read the prompt aloud to analyze vocal biomarkers.</p>
+                  </div>
+                  <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
+                    <AudioRecorder onRecordingComplete={(blob) => {
+                      setAudioBlob(blob);
+                      toast({ title: "Audio saved", description: "Ready to submit." });
+                    }} />
+                  </div>
+                  <div className="mt-10 flex justify-between">
+                    <Button variant="ghost" onClick={() => setActiveTab("video")} className="text-slate-500 hover:text-slate-900">
+                      Back
+                    </Button>
+                    <Button
+                      onClick={onSubmit}
+                      disabled={isSubmitting || !audioBlob}
+                      size="lg"
+                      className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-xl shadow-blue-600/20 px-8 rounded-xl h-12 w-40"
+                    >
+                      {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Submit Analysis"}
+                    </Button>
+                  </div>
+                </TabsContent>
+              </div>
+            </Tabs>
+          </Card>
+          
+          <div className="text-center">
+             <p className="text-xs text-slate-400 flex items-center justify-center gap-1">
+               <ShieldCheck className="h-3 w-3" /> Encrypted & HIPAA Compliant
+             </p>
+          </div>
+        </div>
+      </div>
+
+      <Dialog open={!!openModal && openModal !== "download-summary"} onOpenChange={(open) => !open && setOpenModal(null)}>
+        <DialogContent className="max-w-3xl max-h-[80vh]">
+          <DialogHeader className="flex flex-row items-center justify-between">
+            <div>
+              <DialogTitle>
+                {openModal === "prescriptions" && "Current Prescriptions"}
+                {openModal === "labs" && "Lab Reports"}
+                {openModal === "imaging" && "X-Rays & Imaging"}
+                {openModal === "medical-history" && "Medical History"}
+                {openModal === "insurance" && "Insurance Documents"}
+                {openModal === "emergency-contacts" && "Emergency Contacts"}
+                {openModal === "health-card" && "Full Health Card"}
+              </DialogTitle>
+              <DialogDescription>
+                Patient: Alex Johnson ({patientId})
+              </DialogDescription>
+            </div>
+            <Button variant="ghost" size="icon" onClick={() => setOpenModal(null)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh]">
+            {renderModalContent()}
+          </ScrollArea>
+          <DialogFooter className="flex justify-between mt-4">
+            {openModal && openModal !== "health-card" && (
+              <Button variant="ghost" onClick={() => handleShare(
+                openModal === "prescriptions" ? "vision Prescriptions - Alex Johnson" :
+                openModal === "labs" ? "vision Lab Reports - Alex Johnson" :
+                openModal === "imaging" ? "vision Imaging - Alex Johnson" :
+                openModal === "medical-history" ? "vision Medical History - Alex Johnson" :
+                openModal === "insurance" ? "vision Insurance - Alex Johnson" :
+                openModal === "emergency-contacts" ? "vision Emergency Contacts - Alex Johnson" :
+                "vision Health Record - Alex Johnson",
+                JSON.stringify(
+                  openModal === "prescriptions" ? mockPrescriptions :
+                  openModal === "labs" ? mockLabReports :
+                  openModal === "imaging" ? mockImaging :
+                  openModal === "medical-history" ? mockMedicalHistory :
+                  openModal === "insurance" ? mockInsurance :
+                  openModal === "emergency-contacts" ? mockEmergencyContacts :
+                  null,
+                  null,
+                  2
+                )
+              )}>
+                <Share2 className="mr-2 h-4 w-4" />
+                Share
+              </Button>
+            )}
+            <Button onClick={() => setOpenModal(null)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* For download summary we just show a quick confirmation toast, no real dialog */}
+      <Dialog open={openModal === "download-summary"} onOpenChange={(open) => !open && setOpenModal(null)}>
+        <DialogContent className="max-w-sm">
+          {renderModalContent()}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+

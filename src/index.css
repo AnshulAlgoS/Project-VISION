@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap');
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 215 25% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 15%;
+
+    --primary: 210 65% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 30% 95%;
+    --secondary-foreground: 215 25% 15%;
+
+    --muted: 210 20% 96%;
+    --muted-foreground: 215 15% 50%;
+
+    --accent: 168 55% 42%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 210 20% 90%;
+    --input: 210 20% 90%;
+    --ring: 210 65% 45%;
+
+    --radius: 0.5rem;
+
+    /* Custom healthcare tokens */
+    --risk-safe: 158 60% 42%;
+    --risk-safe-foreground: 0 0% 100%;
+    --risk-watch: 40 90% 50%;
+    --risk-watch-foreground: 30 80% 15%;
+    --risk-critical: 0 72% 51%;
+    --risk-critical-foreground: 0 0% 100%;
+
+    --risk-safe-bg: 158 50% 94%;
+    --risk-watch-bg: 40 80% 94%;
+    --risk-critical-bg: 0 60% 95%;
+
+    --sidebar-background: 210 30% 97%;
+    --sidebar-foreground: 215 20% 35%;
+    --sidebar-primary: 210 65% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 30% 92%;
+    --sidebar-accent-foreground: 215 25% 15%;
+    --sidebar-border: 210 20% 90%;
+    --sidebar-ring: 210 65% 45%;
+
+    --chart-1: 210 65% 45%;
+    --chart-2: 168 55% 42%;
+    --chart-3: 0 72% 51%;
+    --chart-4: 40 90% 50%;
+    --chart-5: 260 50% 55%;
+  }
+
+  .dark {
+    --background: 215 25% 8%;
+    --foreground: 210 20% 95%;
+    --card: 215 25% 11%;
+    --card-foreground: 210 20% 95%;
+    --popover: 215 25% 11%;
+    --popover-foreground: 210 20% 95%;
+    --primary: 210 65% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 215 20% 18%;
+    --secondary-foreground: 210 20% 95%;
+    --muted: 215 20% 18%;
+    --muted-foreground: 215 15% 60%;
+    --accent: 168 55% 42%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 215 20% 20%;
+    --input: 215 20% 20%;
+    --ring: 210 65% 55%;
+    --sidebar-background: 215 25% 10%;
+    --sidebar-foreground: 210 20% 80%;
+    --sidebar-primary: 210 65% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 215 20% 15%;
+    --sidebar-accent-foreground: 210 20% 95%;
+    --sidebar-border: 215 20% 20%;
+    --sidebar-ring: 210 65% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', sans-serif;
+  }
+
+  ::selection,
+  ::-moz-selection {
+    background-color: #22d3ee;
+    color: #0f172a;
+  }
+
+  .font-hero-vision {
+    font-family: 'Space Grotesk', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+}
+
+/* Project Vision command identity */
+:root{--primary:270 55% 58%;--ring:270 55% 58%;--accent:42 48% 60%}
+.vision-home{min-height:100vh;background:#0b0911;color:#f2eef8;font-family:'Space Grotesk',sans-serif;overflow:hidden;position:relative;padding:0 6vw}.vision-home nav{height:96px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #ffffff20;font-size:12px;letter-spacing:2px}.brand{font-size:20px;font-weight:bold;letter-spacing:3px}.vision-home nav>span{color:#8d849a}.vision-hero{padding:80px 0 52px;max-width:700px;position:relative;z-index:2}.eyebrow{color:#c6ad70;font-size:11px;letter-spacing:3px;display:flex;align-items:center;gap:12px}.eyebrow span{width:7px;height:7px;background:#a87ce6;border-radius:50%;box-shadow:0 0 18px #b68bf5}.vision-hero h1{font-size:clamp(56px,7vw,100px);line-height:1.02;letter-spacing:-5px;margin:28px 0}.vision-hero em{font-style:normal;color:#b68ce8}.vision-hero p{max-width:480px;color:#a9a1b5;line-height:1.8;font-size:16px}.hero-actions{display:flex;align-items:center;gap:28px;margin-top:34px;font-size:13px}.primary-action{display:flex;gap:24px;align-items:center;background:#c6ac71;color:#171020;padding:18px 24px;font-weight:bold}.system-label{display:flex;gap:10px;align-items:center;margin-top:45px;color:#a6c9b4;font-size:10px;letter-spacing:1px}.system-label span{color:#786e87;margin-left:18px}.vision-core{position:absolute;right:8vw;top:180px;width:350px;height:350px;display:grid;place-items:center;background:radial-gradient(ellipse,#69409755,transparent 65%)}.core-diamond{font-size:230px;color:#c8aa6e;text-shadow:0 0 70px #a162dc}.orbit{position:absolute;border:1px solid #8d63b64d;width:320px;height:320px;transform:rotate(45deg)}.o2{width:260px;height:260px;transform:rotate(15deg)}.vision-core>span{position:absolute;bottom:-25px;color:#9c82bb;font-size:9px;letter-spacing:3px}.module-grid{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #ffffff20;margin:20px 0 40px;position:relative;z-index:2;background:#100d18}.module-grid>a{padding:28px;border-right:1px solid #ffffff20;transition:background .2s}.module-grid>a:hover{background:#21162f}.module-grid>a>div{display:flex;align-items:center;gap:12px;color:#c6ac71}.module-grid>a>div span{flex:1;font-size:9px;color:#8f819e;letter-spacing:2px}.module-grid h2{font-size:21px;margin:32px 0 10px}.module-grid p{color:#9990a5;font-size:13px;line-height:1.6}.vision-home footer{display:flex;align-items:center;gap:10px;padding-bottom:30px;font-size:9px;letter-spacing:1px;color:#82778f}.vision-home footer span{margin-left:auto}body{background:#100d18}header{border-color:#5b3b7844!important}.bg-white{background-color:#f4f0f9}.bg-blue-600{background-color:#713fa0}.text-blue-600,.text-blue-700{color:#7845a0}.bg-blue-50{background-color:#ede3f6}@media(max-width:1000px){.vision-core{opacity:.2;right:-90px}.vision-home nav>span{display:none}}@media(max-width:650px){.vision-home nav{height:76px}.brand{font-size:14px}.vision-hero{padding-top:50px}.vision-hero h1{letter-spacing:-3px}.module-grid{grid-template-columns:1fr}.module-grid>a{border-bottom:1px solid #ffffff20}.vision-home footer span{display:none}.hero-actions{gap:16px}.system-label{flex-wrap:wrap}}
